@@ -1,26 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0b0d10; --panel: #12151a; --line: #1e242c; --hover: #1a1f27;
+  --track: #1e242c; --text: #e6edf3; --dim: #7d8794; --accent: #2dd4bf;
+  --onAccent: #04231e; --pos: #4ade80; --neg: #fb7185;
+  --font: 'Space Grotesk', system-ui, sans-serif;
+  --num: 'IBM Plex Mono', monospace;
+  --r: 4px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --font-sans: var(--font);
+  --font-mono: var(--num);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  margin: 0;
 }
+
+* { box-sizing: border-box; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: rgba(128,140,160,.35); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-fadeUp { animation: fadeUp .16s ease-out; }

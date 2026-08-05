@@ -1,0 +1,164 @@
+import { NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { initSchema } from '@/lib/schema';
+import { getRates, toUsd, convertToDisplay, formatMoney } from '@/lib/currency';
+
+const COLORS: Record<string, string> = {
+  housing: '#60a5fa', daily: '#34d399', online: '#f472b6', real: '#fbbf24',
+  subs: '#a78bfa', transport: '#22d3ee', debt: '#fb7185', savings: '#4ade80', rest: '#94a3b8'
+};
+
+const CAT_META: Record<string, { en: string; ar: string }> = {
+  housing: { en: 'Housing & bills', ar: 'السكن والفواتير' },
+  daily: { en: 'Daily / groceries', ar: 'المصاريف اليومية' },
+  online: { en: 'Online spending', ar: 'شراء عبر الإنترنت' },
+  real: { en: 'In-person spending', ar: 'شراء مباشر' },
+  subs: { en: 'Subscriptions', ar: 'الاشتراكات' },
+  transport: { en: 'Transport', ar: 'التنقل' },
+  debt: { en: 'Debt payments', ar: 'تسديد الديون' },
+  savings: { en: 'Savings', ar: 'الادخار' },
+  income: { en: 'Income', ar: 'الدخل' },
+};
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+export async function GET(request: Request) {
+  initSchema();
+
+  const url = new URL(request.url);
+  const month = parseInt(url.searchParams.get('month') || String(new Date().getMonth() + 1), 10);
+  const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()), 10);
+  const monthStr = String(month).padStart(2, '0');
+
+  const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+  const settings: Record<string, string> = {};
+  for (const r of settingsRows) settings[r.key] = r.value;
+
+  const currency = settings.currency || 'USD';
+  const rates = getRates(settings);
+
+  const salaries = db.prepare('SELECT * FROM salaries WHERE month = ? AND year = ?').all(month, year);
+  const services = db.prepare('SELECT * FROM services WHERE month = ? AND year = ?').all(month, year);
+  const subs = db.prepare('SELECT * FROM subscriptions WHERE month = ? AND year = ?').all(month, year);
+  const bills = db.prepare('SELECT * FROM bills WHERE month = ? AND year = ?').all(month, year);
+  const debtsOwe = db.prepare('SELECT * FROM debts WHERE type = \'owe\' AND month = ? AND year = ?').all(month, year);
+  const debtsOwed = db.prepare('SELECT * FROM debts WHERE type = \'owed\' AND month = ? AND year = ?').all(month, year);
+  const budgets = db.prepare('SELECT * FROM budgets WHERE month = ? AND year = ?').all(month, year);
+  const transactions = db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC').all();
+
+  const salaryTotalDisplay = salaries.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.net), s.currency || 'USD', currency, rates), 0);
+  const serviceTotalDisplay = services.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.amount), s.currency || 'USD', currency, rates), 0);
+  const subsTotalDisplay = subs.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.cost), s.currency || 'USD', currency, rates), 0);
+  const billsTotalDisplay = bills.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.cost), s.currency || 'USD', currency, rates), 0);
+  const debtOweTotDisplay = debtsOwe.reduce((a: number, d: any) => a + convertToDisplay(parseFloat(d.remaining), d.currency || 'USD', currency, rates), 0);
+  const debtOwedTotDisplay = debtsOwed.reduce((a: number, d: any) => a + convertToDisplay(parseFloat(d.remaining), d.currency || 'USD', currency, rates), 0);
+
+  const salariesDisplay = salaries.map((s: any) => ({ ...s, net_display: convertToDisplay(parseFloat(s.net), s.currency || 'USD', currency, rates) }));
+  const servicesDisplay = services.map((s: any) => ({ ...s, amount_display: convertToDisplay(parseFloat(s.amount), s.currency || 'USD', currency, rates) }));
+  const subsDisplay = subs.map((s: any) => ({ ...s, cost_display: convertToDisplay(parseFloat(s.cost), s.currency || 'USD', currency, rates) }));
+  const billsDisplay = bills.map((b: any) => ({ ...b, cost_display: convertToDisplay(parseFloat(b.cost), b.currency || 'USD', currency, rates) }));
+  const debtsOweDisplay = debtsOwe.map((d: any) => ({ ...d, remaining_display: convertToDisplay(parseFloat(d.remaining), d.currency || 'USD', currency, rates), total_display: convertToDisplay(parseFloat(d.total), d.currency || 'USD', currency, rates) }));
+  const debtsOwedDisplay = debtsOwed.map((d: any) => ({ ...d, remaining_display: convertToDisplay(parseFloat(d.remaining), d.currency || 'USD', currency, rates), total_display: convertToDisplay(parseFloat(d.total), d.currency || 'USD', currency, rates) }));
+
+  const spendByCat: Record<string, number> = { housing: 0, daily: 0, online: 0, real: 0, subs: 0, transport: 0, debt: 0, savings: 0 };
+  const monthTxs = transactions.filter((t: any) => t.date.startsWith(`${year}-${monthStr}`));
+  monthTxs.forEach((t: any) => {
+    if (t.type === 'spend' && spendByCat[t.category] !== undefined) {
+      spendByCat[t.category] += Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates));
+    }
+  });
+  const totalOut = Object.values(spendByCat).reduce((a, b) => a + b, 0);
+  const incomeTxTotal = monthTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
+  const totalIn = incomeTxTotal;
+  const rest = totalIn - totalOut;
+
+  const displaySalaryTotal = formatMoney(salaryTotalDisplay, currency as any, true);
+  const displayServiceTotal = formatMoney(serviceTotalDisplay, currency as any, true);
+  const displaySubsTotal = formatMoney(subsTotalDisplay, currency as any, true);
+  const displayBillsTotal = formatMoney(billsTotalDisplay, currency as any, true);
+  const displayDebtOweTot = formatMoney(debtOweTotDisplay, currency as any, true);
+  const displayDebtOwedTot = formatMoney(debtOwedTotDisplay, currency as any, true);
+
+  const txRows = transactions.map((t: any) => ({
+    id: t.id, date: t.date, merchant: t.merchant, category: t.category, method: t.method,
+    original_currency: t.original_currency, original_amount: t.original_amount,
+    converted_amount: t.converted_amount,
+    amount: formatMoney(convertToDisplay(t.converted_amount, 'USD', currency as any, rates), currency as any, true),
+    color: t.converted_amount > 0 ? '#4ade80' : '#e6edf3',
+    dotStyle: { width: 7, height: 7, borderRadius: 2, background: COLORS[t.category] || '#2dd4bf', display: 'inline-block' }
+  }));
+
+  const upcoming: { name: string; when: string; kind: string; amount: string; in: string }[] = [];
+  const today = new Date();
+  const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+  subs.forEach((s: any) => {
+    const dateStr = s.next_billing || '';
+    const amount = formatMoney(convertToDisplay(parseFloat(s.cost), s.currency || 'USD', currency as any, rates), currency as any, true);
+    upcoming.push({ name: s.name, when: dateStr, kind: 'Subscription', amount, in: dateStr });
+  });
+
+  debtsOwe.forEach((d: any) => {
+    const amount = formatMoney(convertToDisplay(parseFloat(d.remaining), d.currency || 'USD', currency as any, rates), currency as any, true);
+    upcoming.push({ name: d.person, when: d.due || '', kind: 'Debt', amount, in: d.due || '' });
+  });
+
+  debtsOwed.forEach((d: any) => {
+    const amount = formatMoney(convertToDisplay(parseFloat(d.remaining), d.currency || 'USD', currency as any, rates), currency as any, true);
+    upcoming.push({ name: d.person, when: d.due || '', kind: 'Owed', amount, in: d.due || '' });
+  });
+
+  const period = url.searchParams.get('period') || '6M';
+  const periodMonths = period === '1M' ? 1 : period === '3M' ? 3 : period === '1Y' ? 12 : 6;
+
+  const trend: { month: string; income: number; spend: number }[] = [];
+  for (let i = periodMonths - 1; i >= 0; i--) {
+    const d = new Date(year, month - 1 - i, 1);
+    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    const mmStr = String(d.getMonth() + 1).padStart(2, '0');
+
+    const monthTransactions = db.prepare('SELECT * FROM transactions WHERE strftime(\'%Y-%m\', date) = ?').all(`${d.getFullYear()}-${mmStr}`);
+    const income = monthTransactions.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + t.converted_amount, 0);
+    const spend = monthTransactions.filter((t: any) => t.type === 'spend').reduce((a: number, t: any) => a + Math.abs(t.converted_amount), 0);
+
+    trend.push({ month: label, income, spend });
+  }
+
+  const budgetsDisplay = budgets.map((b: any) => ({
+    ...b,
+    budget_amount_display: convertToDisplay(parseFloat(b.budget_amount), b.currency || 'USD', currency as any, rates),
+  }));
+
+  return NextResponse.json({
+    settings,
+    salaries: salariesDisplay,
+    services: servicesDisplay,
+    subs: subsDisplay,
+    bills: billsDisplay,
+    debtsOwe: debtsOweDisplay,
+    debtsOwed: debtsOwedDisplay,
+    budgets, transactions, txRows,
+    totals: {
+      totalIn, totalOut, rest,
+      salaryTotal: salaryTotalDisplay,
+      serviceTotal: serviceTotalDisplay,
+      subsTotal: subsTotalDisplay,
+      billsTotal: billsTotalDisplay,
+      debtOweTot: debtOweTotDisplay,
+      debtOwedTot: debtOwedTotDisplay,
+    },
+    totalsDisplay: {
+      salaryTotal: displaySalaryTotal,
+      serviceTotal: displayServiceTotal,
+      subsTotal: displaySubsTotal,
+      billsTotal: displayBillsTotal,
+      debtOweTot: displayDebtOweTot,
+      debtOwedTot: displayDebtOwedTot,
+    },
+    spendByCat,
+    spendByCatRaw: spendByCat,
+    trend,
+    upcoming,
+    budgetsDisplay,
+  });
+}

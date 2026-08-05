@@ -1,0 +1,102 @@
+'use client';
+
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+type Period = '1M' | '3M' | '6M' | '1Y';
+
+export default function OverviewScreen({ data, currency, theme, period, setPeriod, t, catFilter, setCatFilter, setScreen }: any) {
+  const { totals, spendByCat, txRows, trend, upcoming = [], totalsDisplay } = data;
+  const currencySymbol = currency === 'DA' ? 'DA' : currency === 'EUR' ? '€' : '$';
+
+  const kpis = [
+    { label: 'MONEY IN', value: `${totalsDisplay?.salaryTotal || totals.totalIn.toFixed(2)}`, color: '#4ade80', delta: '+4.1%', sub: 'vs July' },
+    { label: 'MONEY OUT', value: `${totalsDisplay?.billsTotal || totals.totalOut.toFixed(2)}`, color: '#e6edf3', delta: '+1.8%', sub: 'vs July' },
+    { label: 'NET', value: `${(totals.totalIn - totals.totalOut).toFixed(2)}`, color: '#4ade80', delta: `${Math.round((totals.totalIn - totals.totalOut) / Math.max(totals.totalIn, 1) * 100)}%`, sub: 'of income kept' },
+    { label: 'I OWE', value: `${totalsDisplay?.debtOweTot || totals.debtOweTot.toFixed(2)}`, color: '#fb7185', delta: `${data.debtsOwe.length}`, sub: 'open debts' },
+    { label: 'OWED TO ME', value: `${totalsDisplay?.debtOwedTot || totals.debtOwedTot.toFixed(2)}`, color: '#4ade80', delta: `${data.debtsOwed.length}`, sub: 'people' },
+  ];
+
+  const periodMonths: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
+  const filteredTrend = (trend || []).slice(-(periodMonths[period] || 6));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+        {(['1M', '3M', '6M', '1Y'] as Period[]).map(p => (
+          <button key={p} onClick={() => setPeriod(p)} style={{
+            padding: '6px 11px', borderRadius: 4, border: '1px solid #1e242c', cursor: 'pointer',
+            font: '500 11px IBM Plex Mono, monospace', background: period === p ? '#2dd4bf' : 'transparent',
+            color: period === p ? '#04231e' : '#7d8794'
+          }}>{t(p)}</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(178px, 1fr))', gap: 12 }}>
+        {kpis.map((k, i) => (
+          <div key={i} style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4, padding: '14px 15px' }}>
+            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.08em' }}>{k.label}</div>
+            <div style={{ marginTop: 8, font: '600 21px IBM Plex Mono, monospace', color: k.color, letterSpacing: '-.02em' }}>{k.value}</div>
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, font: '400 11px Space Grotesk, sans-serif', color: '#7d8794' }}>
+              <span style={{ font: '600 10.5px IBM Plex Mono, monospace', color: k.color }}>{k.delta}</span><span>{k.sub}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #1e242c', display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ font: '600 13.5px Space Grotesk, sans-serif' }}>{t('flow')}</div>
+          <div style={{ font: '400 11px Space Grotesk, sans-serif', color: '#7d8794' }}>Hover a month to read its values</div>
+        </div>
+        <div style={{ padding: '12px 18px', height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={filteredTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e242c" />
+              <XAxis dataKey="month" stroke="#7d8794" style={{ fontSize: 12 }} />
+              <YAxis stroke="#7d8794" style={{ fontSize: 12 }} />
+              <Tooltip contentStyle={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4 }} labelStyle={{ color: '#e6edf3' }} itemStyle={{ color: '#e6edf3' }} />
+              <Line type="monotone" dataKey="income" stroke="#4ade80" strokeWidth={2} dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="spend" stroke="#fb7185" strokeWidth={2} dot={{ r: 4 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: 16 }}>
+        <div style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4 }}>
+          <div style={{ padding: '13px 16px', borderBottom: '1px solid #1e242c', font: '600 12.5px Space Grotesk, sans-serif', display: 'flex', justifyContent: 'space-between' }}>
+            <span>{t('recent')}</span>
+            <a href="#" onClick={(e) => { e.preventDefault(); setScreen('tx'); }} style={{ font: '500 10.5px IBM Plex Mono, monospace', color: '#2dd4bf', textDecoration: 'none' }}>{t('all')} →</a>
+          </div>
+          {txRows.slice(0, 7).map((r: any) => (
+            <div key={r.id} style={{ padding: '10px 16px', borderBottom: '1px solid #1e242c', display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ font: '500 12.5px Space Grotesk, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.merchant}</div>
+                <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 7, font: '400 10.5px IBM Plex Mono, monospace', color: '#7d8794' }}>
+                  <span style={r.dotStyle as any}></span>{r.category} · {r.method}
+                </div>
+              </div>
+              <div style={{ font: '600 13px IBM Plex Mono, monospace', color: r.color, whiteSpace: 'nowrap' }}>{r.amount}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4 }}>
+          <div style={{ padding: '13px 16px', borderBottom: '1px solid #1e242c', font: '600 12.5px Space Grotesk, sans-serif' }}>{t('upcoming')}</div>
+          {upcoming.map((u: any, i: number) => (
+            <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid #1e242c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <div>
+                <div style={{ font: '500 12.5px Space Grotesk, sans-serif' }}>{u.name}</div>
+                <div style={{ marginTop: 3, font: '400 10.5px IBM Plex Mono, monospace', color: '#7d8794' }}>{u.when} · {u.kind}</div>
+              </div>
+              <div style={{ textAlign: 'end' }}>
+                <div style={{ font: '600 12.5px IBM Plex Mono, monospace', color: u.amount.startsWith('-') ? '#e6edf3' : '#4ade80' }}>{u.amount}</div>
+                <div style={{ marginTop: 3, font: '400 10px IBM Plex Mono, monospace', color: '#7d8794' }}>{u.in}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

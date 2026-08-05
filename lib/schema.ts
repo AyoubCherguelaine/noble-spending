@@ -1,0 +1,113 @@
+import { db } from './db';
+
+export function initSchema() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS categories (key TEXT PRIMARY KEY, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, color TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, type TEXT NOT NULL DEFAULT 'owe', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE IF NOT EXISTS transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, merchant TEXT NOT NULL, category TEXT NOT NULL,
+      method TEXT, original_currency TEXT NOT NULL DEFAULT 'USD', original_amount REAL NOT NULL,
+      converted_amount REAL NOT NULL, type TEXT DEFAULT 'spend', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      salary_id TEXT
+    );
+    CREATE TABLE IF NOT EXISTS salaries (
+      id TEXT PRIMARY KEY, company TEXT NOT NULL, role TEXT, gross REAL, net REAL NOT NULL,
+      payday TEXT, type TEXT, date TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS services (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT, terms TEXT, amount REAL NOT NULL,
+      status TEXT DEFAULT 'Active', next_invoice TEXT, date TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, plan TEXT, cost REAL NOT NULL,
+      next_billing TEXT, date TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS bills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, cost REAL NOT NULL, average REAL,
+      date TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS debts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, person TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'owe',
+      total REAL NOT NULL, remaining REAL NOT NULL, due TEXT, date TEXT, note TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS budgets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, category_key TEXT NOT NULL, budget_amount REAL NOT NULL,
+      month INTEGER NOT NULL, year INTEGER NOT NULL, currency TEXT DEFAULT 'USD'
+    );
+    CREATE TABLE IF NOT EXISTS payment_methods (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'card',
+      details TEXT, icon TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS merchants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, category TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
+    CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
+    CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+  `);
+
+  try {
+    const salariesInfo = db.pragma('table_info(salaries)') as any[];
+    const idCol = salariesInfo.find((c: any) => c.name === 'id');
+    if (idCol && idCol.type === 'integer') {
+      const rows = db.prepare('SELECT * FROM salaries').all() as any[];
+      db.exec(`
+        CREATE TABLE salaries_new (
+          id TEXT PRIMARY KEY, company TEXT NOT NULL, role TEXT, gross REAL, net REAL NOT NULL,
+          payday TEXT, type TEXT, date TEXT, month INTEGER NOT NULL, year INTEGER NOT NULL
+        );
+      `);
+      const uuidStmt = db.prepare('INSERT INTO salaries_new (id, company, role, gross, net, payday, type, date, month, year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      for (const row of rows) {
+        uuidStmt.run(crypto.randomUUID(), row.company, row.role, row.gross, row.net, row.payday, row.type, row.date, row.month, row.year);
+      }
+      db.exec('DROP TABLE salaries; ALTER TABLE salaries_new RENAME TO salaries;');
+    }
+  } catch (e) {
+    console.error('Salary UUID migration failed:', e);
+  }
+
+  try {
+    const txInfo = db.pragma('table_info(transactions)') as any[];
+    const hasSalaryId = txInfo.some((c: any) => c.name === 'salary_id');
+    if (!hasSalaryId) {
+      db.exec('ALTER TABLE transactions ADD COLUMN salary_id TEXT;');
+    }
+  } catch (e) {
+    console.error('Transaction salary_id migration failed:', e);
+  }
+
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_salary_id ON transactions(salary_id);');
+  } catch (e) {
+    console.error('Transaction salary_id index creation failed:', e);
+  }
+
+  const addCurrencyIfMissing = (table: string) => {
+    try {
+      const info = db.pragma(`table_info(${table})`) as any[];
+      if (!info.some((c: any) => c.name === 'currency')) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT DEFAULT 'USD';`);
+      }
+    } catch (e) {
+      console.error(`Currency migration failed for ${table}:`, e);
+    }
+  };
+
+  addCurrencyIfMissing('services');
+  addCurrencyIfMissing('subscriptions');
+  addCurrencyIfMissing('bills');
+  addCurrencyIfMissing('debts');
+  addCurrencyIfMissing('budgets');
+  addCurrencyIfMissing('salaries');
+
+  try {
+    const debtInfo = db.pragma('table_info(debts)') as any[];
+    if (!debtInfo.some((c: any) => c.name === 'date')) {
+      db.exec('ALTER TABLE debts ADD COLUMN date TEXT;');
+    }
+  } catch (e) {
+    console.error('Debt date migration failed:', e);
+  }
+}
