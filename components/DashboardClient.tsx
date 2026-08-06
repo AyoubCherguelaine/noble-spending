@@ -74,6 +74,11 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
 
   const monthLabel = `${MONTH_NAMES[month - 1]} ${year}`;
 
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  };
+
   const t = (key: string) => {
     const dict: Record<string, string> = {
       overview: 'Overview', income: 'Income', spending: 'Spending', debts: 'Debts',
@@ -95,7 +100,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
     <div dir="ltr" style={{ minHeight: '100vh', background: '#0b0d10', color: '#e6edf3', fontFamily: "'Space Grotesk',system-ui,sans-serif", display: 'grid', gridTemplateColumns: '228px 1fr' }}>
       <Sidebar screen={screen} setScreen={setScreen} theme={theme} setTheme={setTheme} currency={displayCurrency} month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} totals={data?.totals} t={t} onOpenSettings={() => setSettingsOpen(true)} />
       <main style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <Header month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} netLabel={netLabel} query={query} setQuery={setQuery} onAdd={() => setModalOpen(true)} t={t} />
+        <Header month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} netLabel={netLabel} query={query} setQuery={setQuery} onAdd={() => setModalOpen(true)} t={t} onLogout={logout} />
         <div style={{ padding: '22px 26px 60px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {screen === 'overview' && data && <OverviewScreen data={data} currency={displayCurrency} theme={theme} period={period} setPeriod={setPeriod} t={t} catFilter={catFilter} setCatFilter={setCatFilter} setScreen={setScreen} />}
           {screen === 'income' && data && <IncomeScreen data={data} currency={displayCurrency} t={t} refresh={refresh} inputCurrency={inputCurrency} month={month} year={year} />}

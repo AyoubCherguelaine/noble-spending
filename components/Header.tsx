@@ -1,6 +1,6 @@
 'use client';
 
-export default function Header({ month, year, setMonth, setYear, monthLabel, netLabel, query, setQuery, onAdd, t }: any) {
+export default function Header({ month, year, setMonth, setYear, monthLabel, netLabel, query, setQuery, onAdd, t, onLogout }: any) {
 
   const prevMonth = () => {
     if (month === 1) {
@@ -39,6 +39,9 @@ export default function Header({ month, year, setMonth, setYear, monthLabel, net
           <div style={{ font: '600 15px IBM Plex Mono, monospace', color: '#4ade80' }}>{netLabel}</div>
         </div>
         <button onClick={onAdd} style={{ height: 32, padding: '0 14px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, font: '600 12px Space Grotesk, sans-serif', cursor: 'pointer' }}>+ {t('add')}</button>
+        {onLogout && (
+          <button onClick={onLogout} style={{ height: 32, padding: '0 12px', background: 'transparent', border: '1px solid #1e242c', color: '#7d8794', borderRadius: 4, font: '500 12px Space Grotesk, sans-serif', cursor: 'pointer' }}>Logout</button>
+        )}
       </div>
     </header>
   );

@@ -9,7 +9,10 @@ export default function SettingsModal({ settings, onClose, onSaved, t }: any) {
     rate_da: settings?.rate_da || '134.4',
     rate_eur_da: settings?.rate_eur_da || '146',
   });
+  const [creds, setCreds] = useState({ currentUsername: '', currentPassword: '', newUsername: '', newPassword: '' });
   const [saving, setSaving] = useState(false);
+  const [credSaving, setCredSaving] = useState(false);
+  const [msg, setMsg] = useState('');
 
   const submit = async () => {
     setSaving(true);
@@ -24,6 +27,30 @@ export default function SettingsModal({ settings, onClose, onSaved, t }: any) {
       console.error(e);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changeCreds = async () => {
+    setMsg('');
+    setCredSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'changeCredentials', ...creds }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMsg('Credentials updated. Please sign in again.');
+        setCreds({ currentUsername: '', currentPassword: '', newUsername: '', newPassword: '' });
+        setTimeout(() => { window.location.href = '/login'; }, 1500);
+      } else {
+        setMsg(data.error || 'Failed');
+      }
+    } catch {
+      setMsg('Network error');
+    } finally {
+      setCredSaving(false);
     }
   };
 
@@ -69,6 +96,16 @@ export default function SettingsModal({ settings, onClose, onSaved, t }: any) {
               </div>
             </div>
             <div style={{ font: '400 10px IBM Plex Mono, monospace', color: '#7d8794' }}>1 EUR = X USD · 1 USD = X DA · 1 EUR = X DA</div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #1e242c', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em' }}>CHANGE CREDENTIALS</div>
+            <input placeholder="Current username" value={creds.currentUsername} onChange={e => setCreds(p => ({ ...p, currentUsername: e.target.value }))} style={{ width: '100%', height: 32, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
+            <input placeholder="Current password" type="password" value={creds.currentPassword} onChange={e => setCreds(p => ({ ...p, currentPassword: e.target.value }))} style={{ width: '100%', height: 32, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
+            <input placeholder="New username" value={creds.newUsername} onChange={e => setCreds(p => ({ ...p, newUsername: e.target.value }))} style={{ width: '100%', height: 32, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
+            <input placeholder="New password" type="password" value={creds.newPassword} onChange={e => setCreds(p => ({ ...p, newPassword: e.target.value }))} style={{ width: '100%', height: 32, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
+            {msg && <div style={{ font: '400 11px IBM Plex Mono, monospace', color: msg.includes('updated') ? '#4ade80' : '#f87171' }}>{msg}</div>}
+            <button onClick={changeCreds} disabled={credSaving} style={{ height: 32, padding: '0 16px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, font: '600 12px Space Grotesk, sans-serif', cursor: 'pointer', opacity: credSaving ? 0.6 : 1 }}>Update credentials</button>
           </div>
         </div>
         <div style={{ padding: '14px 18px', borderTop: '1px solid #1e242c', display: 'flex', justifyContent: 'flex-end', gap: 9 }}>

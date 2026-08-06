@@ -7,7 +7,7 @@ const ibm = IBM_Plex_Mono({ variable: "--font-ibm", subsets: ["latin"], weight: 
 const news = Newsreader({ variable: "--font-news", subsets: ["latin"], weight: ["400","600"] });
 
 export const metadata: Metadata = {
-  title: "Moneyflow",
+  title: "Intik",
   description: "Personal money flow dashboard",
 };
 

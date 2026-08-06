@@ -73,3 +73,10 @@ components/
 lib/
   currency.ts           — formatting & conversion utilities
   schema.ts             — SQLite schema & types
+
+
+# init user : 
+
+```
+curl -s -X POST http://localhost:3000/api/auth/setup -H "Content-Type: application/json" -d '{"username":"admin","password":"securepass"}' > /dev/null && curl -s -D - -o /dev/null http://localhost:3000/ 2>&1 | grep -i "location"
+```
