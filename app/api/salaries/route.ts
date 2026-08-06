@@ -24,22 +24,12 @@ export async function POST(request: Request) {
     const { company, role, gross, net, payday, type, date, month, year, currency } = body;
     if (!company?.trim() || !net) return NextResponse.json({ error: 'company and net are required' }, { status: 400 });
 
-    const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
-    const settings: Record<string, string> = {};
-    for (const r of settingsRows) settings[r.key] = r.value;
-    const rates = getRates(settings);
-
     const entryCurrency = currency || 'USD';
-    const amount = parseFloat(net);
-    const converted = toUsd(amount, entryCurrency, rates);
-
     const salaryDate = date || new Date().toISOString().split('T')[0];
     const salaryId = crypto.randomUUID();
     const stmt = db.prepare('INSERT INTO salaries (id, company, role, gross, net, payday, type, date, currency, month, year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     stmt.run(salaryId, company.trim(), role || '', gross || 0, net, payday || '', type || '', salaryDate, entryCurrency, month || new Date().getMonth() + 1, year || new Date().getFullYear());
     const row = db.prepare('SELECT * FROM salaries WHERE id = ?').get(salaryId);
-
-    db.prepare('INSERT INTO transactions (date, merchant, category, method, original_currency, original_amount, converted_amount, type, note, salary_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(salaryDate, company.trim(), 'income', 'Salary', entryCurrency, amount, converted, 'income', `Salary: ${type || 'Full-time'}`, salaryId);
 
     return NextResponse.json(row, { status: 201 });
   } catch (e) {

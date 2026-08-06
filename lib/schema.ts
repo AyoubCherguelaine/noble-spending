@@ -7,7 +7,7 @@ export function initSchema() {
     CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, type TEXT NOT NULL DEFAULT 'owe', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, merchant TEXT NOT NULL, category TEXT NOT NULL,
-      method TEXT, original_currency TEXT NOT NULL DEFAULT 'USD', original_amount REAL NOT NULL,
+      method TEXT, account_id INTEGER, original_currency TEXT NOT NULL DEFAULT 'USD', original_amount REAL NOT NULL,
       converted_amount REAL NOT NULL, type TEXT DEFAULT 'spend', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       salary_id TEXT
     );
@@ -29,7 +29,7 @@ export function initSchema() {
     );
     CREATE TABLE IF NOT EXISTS debts (
       id INTEGER PRIMARY KEY AUTOINCREMENT, person TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'owe',
-      total REAL NOT NULL, remaining REAL NOT NULL, due TEXT, date TEXT, note TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL
+      total REAL NOT NULL, remaining REAL NOT NULL, due TEXT, date TEXT, note TEXT, currency TEXT DEFAULT 'USD', status TEXT DEFAULT 'active', month INTEGER NOT NULL, year INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS budgets (
       id INTEGER PRIMARY KEY AUTOINCREMENT, category_key TEXT NOT NULL, budget_amount REAL NOT NULL,
@@ -38,6 +38,11 @@ export function initSchema() {
     CREATE TABLE IF NOT EXISTS payment_methods (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'card',
       details TEXT, icon TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'bank', currency TEXT NOT NULL DEFAULT 'USD',
+      details TEXT, icon TEXT, balance REAL DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS merchants (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, category TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -84,6 +89,21 @@ export function initSchema() {
     console.error('Transaction salary_id index creation failed:', e);
   }
 
+  try {
+    const txInfo = db.pragma('table_info(transactions)') as any[];
+    if (!txInfo.some((c: any) => c.name === 'account_id')) {
+      db.exec('ALTER TABLE transactions ADD COLUMN account_id INTEGER;');
+    }
+  } catch (e) {
+    console.error('Transaction account_id migration failed:', e);
+  }
+
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);');
+  } catch (e) {
+    console.error('Transaction account_id index creation failed:', e);
+  }
+
   const addCurrencyIfMissing = (table: string) => {
     try {
       const info = db.pragma(`table_info(${table})`) as any[];
@@ -109,5 +129,14 @@ export function initSchema() {
     }
   } catch (e) {
     console.error('Debt date migration failed:', e);
+  }
+
+  try {
+    const debtInfo = db.pragma('table_info(debts)') as any[];
+    if (!debtInfo.some((c: any) => c.name === 'status')) {
+      db.exec('ALTER TABLE debts ADD COLUMN status TEXT DEFAULT \'active\';');
+    }
+  } catch (e) {
+    console.error('Debt status migration failed:', e);
   }
 }

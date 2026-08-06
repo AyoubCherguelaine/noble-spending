@@ -41,8 +41,8 @@ export async function GET(request: Request) {
   const services = db.prepare('SELECT * FROM services WHERE month = ? AND year = ?').all(month, year);
   const subs = db.prepare('SELECT * FROM subscriptions WHERE month = ? AND year = ?').all(month, year);
   const bills = db.prepare('SELECT * FROM bills WHERE month = ? AND year = ?').all(month, year);
-  const debtsOwe = db.prepare('SELECT * FROM debts WHERE type = \'owe\' AND month = ? AND year = ?').all(month, year);
-  const debtsOwed = db.prepare('SELECT * FROM debts WHERE type = \'owed\' AND month = ? AND year = ?').all(month, year);
+  const debtsOwe = db.prepare("SELECT * FROM debts WHERE type = 'owe' AND status != 'paid'").all();
+  const debtsOwed = db.prepare("SELECT * FROM debts WHERE type = 'owed' AND status != 'paid'").all();
   const budgets = db.prepare('SELECT * FROM budgets WHERE month = ? AND year = ?').all(month, year);
   const transactions = db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC').all();
 
@@ -61,16 +61,17 @@ export async function GET(request: Request) {
   const debtsOwedDisplay = debtsOwed.map((d: any) => ({ ...d, remaining_display: convertToDisplay(parseFloat(d.remaining), d.currency || 'USD', currency, rates), total_display: convertToDisplay(parseFloat(d.total), d.currency || 'USD', currency, rates) }));
 
   const spendByCat: Record<string, number> = { housing: 0, daily: 0, online: 0, real: 0, subs: 0, transport: 0, debt: 0, savings: 0 };
-  const monthTxs = transactions.filter((t: any) => t.date.startsWith(`${year}-${monthStr}`));
+  const monthTxs = transactions.filter((t: any) => t.date.startsWith(`${year}-${monthStr}`) && t.category !== 'transfer' && t.method !== 'transfer');
   monthTxs.forEach((t: any) => {
-    if (t.type === 'spend' && spendByCat[t.category] !== undefined) {
+    if (t.type === 'spend' && !t.salary_id && t.method !== 'Salary' && spendByCat[t.category] !== undefined) {
       spendByCat[t.category] += Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates));
     }
   });
   const totalOut = Object.values(spendByCat).reduce((a, b) => a + b, 0);
-  const incomeTxTotal = monthTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
-  const totalIn = incomeTxTotal;
-  const rest = totalIn - totalOut;
+  const totalOutWithoutDebt = totalOut - (spendByCat.debt || 0);
+  const incomeTxTotal = monthTxs.filter((t: any) => t.type === 'income' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
+  const totalIn = salaryTotalDisplay + incomeTxTotal;
+  const rest = totalIn - totalOutWithoutDebt;
 
   const displaySalaryTotal = formatMoney(salaryTotalDisplay, currency as any, true);
   const displayServiceTotal = formatMoney(serviceTotalDisplay, currency as any, true);
@@ -116,18 +117,86 @@ export async function GET(request: Request) {
     const d = new Date(year, month - 1 - i, 1);
     const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
     const mmStr = String(d.getMonth() + 1).padStart(2, '0');
+    const monthKey = `${d.getFullYear()}-${mmStr}`;
 
     const monthTransactions = db.prepare('SELECT * FROM transactions WHERE strftime(\'%Y-%m\', date) = ?').all(`${d.getFullYear()}-${mmStr}`);
-    const income = monthTransactions.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + t.converted_amount, 0);
-    const spend = monthTransactions.filter((t: any) => t.type === 'spend').reduce((a: number, t: any) => a + Math.abs(t.converted_amount), 0);
+    const filteredForTrend = monthTransactions.filter((t: any) => t.category !== 'transfer' && t.method !== 'transfer');
+    const txIncome = filteredForTrend.filter((t: any) => t.type === 'income' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
+    const spend = filteredForTrend.filter((t: any) => t.type === 'spend' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
 
-    trend.push({ month: label, income, spend });
+    const monthSalaries = db.prepare('SELECT * FROM salaries WHERE month = ? AND year = ?').all(d.getMonth() + 1, d.getFullYear());
+    const salaryIncome = monthSalaries.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.net || 0), s.currency || 'USD', currency, rates), 0);
+
+     trend.push({ month: label, income: txIncome + salaryIncome, spend });
+  }
+
+  const accounts = db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
+  const accountsDisplay = accounts.map((a: any) => ({
+    ...a,
+    balance_display: convertToDisplay(parseFloat(a.balance || 0), a.currency || 'USD', currency as any, rates),
+  }));
+
+  const accountHistory: Record<string, { name: string; currency: string; monthly: { month: string; income: number; outcome: number; balance: number }[] }> = {};
+  const historyMonths: string[] = [];
+  for (let i = periodMonths - 1; i >= 0; i--) {
+    const d = new Date(year, month - 1 - i, 1);
+    const mmStr = String(d.getMonth() + 1).padStart(2, '0');
+    const monthKey = `${d.getFullYear()}-${mmStr}`;
+    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    historyMonths.push(label);
+  }
+
+  for (const acc of accounts) {
+    const accId = String(acc.id);
+    const accTxs: Record<string, { income: number; outcome: number }> = {};
+    historyMonths.forEach(m => { accTxs[m] = { income: 0, outcome: 0 }; });
+
+    const allTxForAccount = db.prepare('SELECT * FROM transactions WHERE account_id = ?').all(acc.id) as any[];
+    const totalNetOriginal = allTxForAccount.reduce((a: number, t: any) => a + (parseFloat(t.original_amount) || 0), 0);
+    const accCurrency = acc.currency || 'USD';
+    const startingBalance = (parseFloat(acc.balance || 0)) - totalNetOriginal;
+
+    allTxForAccount.forEach((t: any) => {
+      const dateStr = t.date;
+      if (!dateStr) return;
+      const d = new Date(dateStr);
+      const mmStr = String(d.getMonth() + 1).padStart(2, '0');
+      const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+      if (!(label in accTxs)) return;
+      const amt = parseFloat(t.original_amount) || 0;
+      if (amt > 0) accTxs[label].income += amt;
+      else accTxs[label].outcome += Math.abs(amt);
+    });
+
+    const monthly: { month: string; income: number; outcome: number; balance: number }[] = [];
+    let running = startingBalance;
+    historyMonths.forEach(m => {
+      const entry = accTxs[m] || { income: 0, outcome: 0 };
+      running += entry.income - entry.outcome;
+      monthly.push({ month: m, income: entry.income, outcome: entry.outcome, balance: running });
+    });
+
+    accountHistory[accId] = {
+      name: acc.name,
+      currency: accCurrency,
+      monthly,
+    };
   }
 
   const budgetsDisplay = budgets.map((b: any) => ({
     ...b,
     budget_amount_display: convertToDisplay(parseFloat(b.budget_amount), b.currency || 'USD', currency as any, rates),
   }));
+
+  const currencyTotals: Record<string, { balance: number; display: number }> = {};
+  accounts.forEach((a: any) => {
+    const cur = a.currency || 'USD';
+    if (!currencyTotals[cur]) currencyTotals[cur] = { balance: 0, display: 0 };
+    currencyTotals[cur].balance += parseFloat(a.balance || 0);
+  });
+  Object.keys(currencyTotals).forEach(cur => {
+    currencyTotals[cur].display = convertToDisplay(currencyTotals[cur].balance, cur, currency as any, rates);
+  });
 
   return NextResponse.json({
     settings,
@@ -138,8 +207,10 @@ export async function GET(request: Request) {
     debtsOwe: debtsOweDisplay,
     debtsOwed: debtsOwedDisplay,
     budgets, transactions, txRows,
+    accounts: accountsDisplay,
+    currencyTotals,
     totals: {
-      totalIn, totalOut, rest,
+      totalIn, totalOut, totalOutWithoutDebt, rest,
       salaryTotal: salaryTotalDisplay,
       serviceTotal: serviceTotalDisplay,
       subsTotal: subsTotalDisplay,
@@ -158,6 +229,7 @@ export async function GET(request: Request) {
     spendByCat,
     spendByCatRaw: spendByCat,
     trend,
+    accountHistory,
     upcoming,
     budgetsDisplay,
   });

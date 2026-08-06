@@ -151,7 +151,7 @@ export default function DebtsScreen({ data, t, refresh, month, year }: any) {
 }
 
 function AddDebtForm({ onClose, onSaved, t, people, month, year }: any) {
-  const [form, setForm] = useState({ person: '', type: 'owe', total: '', remaining: '', due: '', date: new Date().toISOString().split('T')[0], note: '', month: month || new Date().getMonth() + 1, year: year || new Date().getFullYear(), currency: 'USD' });
+  const [form, setForm] = useState({ person: '', type: 'owe', total: '', remaining: '', due: '', date: new Date().toISOString().split('T')[0], note: '', month: month || new Date().getMonth() + 1, year: year || new Date().getFullYear(), currency: 'USD', status: 'active' });
   const [saving, setSaving] = useState(false);
   const [useNewPerson, setUseNewPerson] = useState(false);
 
@@ -227,14 +227,17 @@ function AddDebtForm({ onClose, onSaved, t, people, month, year }: any) {
                 <option value="EUR">EUR</option>
               </select>
             </div>
+            <div>
+              <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Status</div>
+              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{ width: '100%', height: 34, padding: '0 11px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px Space Grotesk, sans-serif', outline: 'none' }}>
+                <option value="active">Active</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
           </div>
           <div>
             <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Due</div>
             <input value={form.due} onChange={e => setForm({ ...form, due: e.target.value })} placeholder="e.g. Aug 20" style={{ width: '100%', height: 34, padding: '0 11px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
-          </div>
-          <div>
-            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Date</div>
-            <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={{ width: '100%', height: 34, padding: '0 11px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
           </div>
           <div>
             <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Date</div>
@@ -267,6 +270,7 @@ function EditDebtModal({ debt, onClose, onSaved, t, month, year }: any) {
     month: debt.month || month || new Date().getMonth() + 1,
     year: debt.year || year || new Date().getFullYear(),
     currency: debt.currency || 'USD',
+    status: debt.status || 'active',
   });
   const [saving, setSaving] = useState(false);
 
@@ -322,6 +326,13 @@ function EditDebtModal({ debt, onClose, onSaved, t, month, year }: any) {
                 <option value="USD">USD</option>
                 <option value="DA">DA</option>
                 <option value="EUR">EUR</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Status</div>
+              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{ width: '100%', height: 34, padding: '0 11px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px Space Grotesk, sans-serif', outline: 'none' }}>
+                <option value="active">Active</option>
+                <option value="paid">Paid</option>
               </select>
             </div>
           </div>

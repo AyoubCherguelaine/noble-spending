@@ -105,6 +105,7 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
   const isEdit = !!salary?.id;
   const today = new Date().toISOString().split('T')[0];
   const linkedTx = getTxForSalary ? getTxForSalary(salary?.id) : null;
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [form, setForm] = useState(() => {
     const initial = salary || {};
     return {
@@ -118,12 +119,17 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
       currency: initial.currency || 'USD',
       month: initial.month || month || new Date().getMonth() + 1,
       year: initial.year || year || new Date().getFullYear(),
+      account_id: linkedTx?.account_id || '',
       txDate: linkedTx?.date || today,
       txAmount: linkedTx?.original_amount ?? initial.net ?? '',
       txNote: linkedTx?.note || `Salary: ${initial.type || 'Full-time'}`,
     };
   });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/accounts').then(r => r.json()).then((rows: any[]) => setAccounts(rows)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isEdit && form.company) {
@@ -153,37 +159,37 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
       });
       const savedSalary = await res.json();
 
-      if (linkedTx || isEdit) {
-        const txUrl = isEdit ? `/api/transactions` : '/api/transactions';
-        const txMethod = isEdit ? 'PUT' : 'POST';
-        const txBody = isEdit ? {
-          id: linkedTx?.id,
-          date: form.txDate,
-          merchant: form.company,
-          category: 'income',
-          method: 'Salary',
-          original_currency: form.currency,
-          original_amount: parseFloat(form.txAmount) || parseFloat(form.net) || 0,
-          type: 'income',
-          note: form.txNote,
-          salary_id: savedSalary.id,
-        } : {
-          date: form.txDate,
-          merchant: form.company,
-          category: 'income',
-          method: 'Salary',
-          original_currency: form.currency,
-          original_amount: parseFloat(form.txAmount) || parseFloat(form.net) || 0,
-          type: 'income',
-          note: form.txNote,
-          salary_id: savedSalary.id,
-        };
-        await fetch(txUrl, {
-          method: txMethod,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(txBody),
-        });
-      }
+      const txUrl = isEdit ? `/api/transactions` : '/api/transactions';
+      const txMethod = isEdit ? 'PUT' : 'POST';
+      const txBody = isEdit ? {
+        id: linkedTx?.id,
+        date: form.txDate,
+        merchant: form.company,
+        category: 'income',
+        method: 'Salary',
+        account_id: form.account_id ? Number(form.account_id) : null,
+        original_currency: form.currency,
+        original_amount: parseFloat(form.txAmount) || parseFloat(form.net) || 0,
+        type: 'income',
+        note: form.txNote,
+        salary_id: savedSalary.id,
+      } : {
+        date: form.txDate,
+        merchant: form.company,
+        category: 'income',
+        method: 'Salary',
+        account_id: form.account_id ? Number(form.account_id) : null,
+        original_currency: form.currency,
+        original_amount: parseFloat(form.txAmount) || parseFloat(form.net) || 0,
+        type: 'income',
+        note: form.txNote,
+        salary_id: savedSalary.id,
+      };
+      await fetch(txUrl, {
+        method: txMethod,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(txBody),
+      });
 
       onSaved();
     } catch (e) {
@@ -216,6 +222,13 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
         <input value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="Type" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
         <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
       </div>
+      <div>
+        <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>SOURCE ACCOUNT *</div>
+        <select value={form.account_id} onChange={e => setForm({ ...form, account_id: e.target.value })} style={{ width: '100%', height: 34, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }}>
+          <option value="">Select account</option>
+          {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+        </select>
+      </div>
       {isEdit && (
         <div style={{ padding: '10px 0 0', borderTop: '1px solid #1e242c', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em' }}>LINKED TRANSACTION</div>
@@ -237,7 +250,7 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
       )}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button onClick={onClose} disabled={saving} style={{ height: 30, padding: '0 12px', background: 'transparent', border: '1px solid #1e242c', color: '#e6edf3', borderRadius: 4, cursor: 'pointer' }}>Cancel</button>
-        <button onClick={submit} disabled={saving || !form.company || !form.net} style={{ height: 30, padding: '0 14px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, cursor: 'pointer', opacity: saving || !form.company || !form.net ? 0.6 : 1 }}>{isEdit ? 'Update' : 'Save'}</button>
+        <button onClick={submit} disabled={saving || !form.company || !form.net || !form.account_id} style={{ height: 30, padding: '0 14px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, cursor: 'pointer', opacity: saving || !form.company || !form.net || !form.account_id ? 0.6 : 1 }}>{isEdit ? 'Update' : 'Save'}</button>
       </div>
     </div>
   );
@@ -306,6 +319,7 @@ function EditSalaryTxModal({ tx, onClose, onSaved, t }: any) {
     merchant: tx.merchant || '',
     category: tx.category || 'income',
     method: tx.method || 'Salary',
+    account_id: tx.account_id || '',
     original_currency: tx.original_currency || 'USD',
     original_amount: tx.original_amount || 0,
     type: tx.type || 'income',
@@ -313,14 +327,23 @@ function EditSalaryTxModal({ tx, onClose, onSaved, t }: any) {
     salary_id: tx.salary_id || '',
   });
   const [saving, setSaving] = useState(false);
+  const [accounts, setAccounts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/accounts').then(r => r.json()).then((rows: any[]) => setAccounts(rows)).catch(() => {});
+  }, []);
 
   const submit = async () => {
+    if (!form.account_id) {
+      alert('Please select an account.');
+      return;
+    }
     setSaving(true);
     try {
       await fetch('/api/transactions', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, original_amount: parseFloat(form.original_amount) || 0 }),
+        body: JSON.stringify({ ...form, account_id: Number(form.account_id), original_amount: parseFloat(form.original_amount) || 0 }),
       });
       onSaved();
     } catch (e) {
@@ -348,6 +371,13 @@ function EditSalaryTxModal({ tx, onClose, onSaved, t }: any) {
               <input value={form.original_amount} onChange={e => setForm({ ...form, original_amount: e.target.value })} type="number" style={{ width: '100%', height: 34, padding: '0 11px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px IBM Plex Mono, monospace', outline: 'none' }} />
             </div>
           </div>
+          <div>
+            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Account *</div>
+            <select value={form.account_id} onChange={e => setForm({ ...form, account_id: e.target.value })} style={{ width: '100%', height: 34, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }}>
+              <option value="">Select account</option>
+              {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+            </select>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Category</div>
@@ -374,7 +404,7 @@ function EditSalaryTxModal({ tx, onClose, onSaved, t }: any) {
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={onClose} disabled={saving} style={{ height: 32, padding: '0 14px', background: 'transparent', border: '1px solid #1e242c', color: '#e6edf3', borderRadius: 4, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={submit} disabled={saving} style={{ height: 32, padding: '0 16px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>Update</button>
+            <button onClick={submit} disabled={saving || !form.account_id} style={{ height: 32, padding: '0 16px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, cursor: 'pointer', opacity: saving || !form.account_id ? 0.6 : 1 }}>Update</button>
           </div>
         </div>
       </div>

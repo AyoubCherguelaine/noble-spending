@@ -15,6 +15,17 @@ export default function TransactionsScreen({ data, currency, t, catFilter, query
   const sum = rows.reduce((a: number, r: any) => a + (r.converted_amount || 0), 0);
   const [editingTx, setEditingTx] = useState<any>(null);
   const [editingSalaryId, setEditingSalaryId] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/accounts').then(r => r.json()).then((rows: any[]) => setAccounts(rows)).catch(() => {});
+  }, []);
+
+  const getAccountName = (accountId: number | null | undefined) => {
+    if (!accountId) return '—';
+    const account = accounts.find((a: any) => a.id === accountId);
+    return account ? `${account.name} (${account.currency})` : `#${accountId}`;
+  };
 
   return (
     <div style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4, overflow: 'hidden' }}>
@@ -22,14 +33,15 @@ export default function TransactionsScreen({ data, currency, t, catFilter, query
         <span style={{ font: '600 12.5px Space Grotesk, sans-serif' }}>{t('tx')}</span>
         <span style={{ font: '400 10.5px IBM Plex Mono, monospace', color: '#7d8794' }}>{rows.length} movements</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '74px 1.5fr 1fr 110px 74px 106px 80px', gap: 14, padding: '11px 16px', borderBottom: '1px solid #1e242c', background: '#1a1f27', font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-        <span>{t('date')}</span><span>{t('merchant')}</span><span>{t('cat')}</span><span>{t('method')}</span><span style={{ textAlign: 'end' }}>{t('orig')}</span><span style={{ textAlign: 'end' }}>{t('amount')}</span><span style={{ textAlign: 'end' }}>Actions</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '74px 1.5fr 1fr 110px 100px 74px 106px 80px', gap: 14, padding: '11px 16px', borderBottom: '1px solid #1e242c', background: '#1a1f27', font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <span>{t('date')}</span><span>{t('merchant')}</span><span>{t('cat')}</span><span>Account</span><span>{t('method')}</span><span style={{ textAlign: 'end' }}>{t('orig')}</span><span style={{ textAlign: 'end' }}>{t('amount')}</span><span style={{ textAlign: 'end' }}>Actions</span>
       </div>
       {rows.map((r: any) => (
-        <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '74px 1.5fr 1fr 110px 74px 106px 80px', gap: 14, padding: '11px 16px', borderBottom: '1px solid #1e242c', alignItems: 'center' }}>
+        <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '74px 1.5fr 1fr 110px 100px 74px 106px 80px', gap: 14, padding: '11px 16px', borderBottom: '1px solid #1e242c', alignItems: 'center' }}>
           <span style={{ font: '400 11.5px IBM Plex Mono, monospace', color: '#7d8794' }}>{r.date}</span>
           <span style={{ font: '500 12.5px Space Grotesk, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.merchant}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 7, font: '400 11.5px Space Grotesk, sans-serif', color: '#7d8794' }}><span style={r.dotStyle as any}></span>{r.category}</span>
+          <span style={{ font: '400 11px IBM Plex Mono, monospace', color: '#7d8794' }}>{getAccountName(r.account_id)}</span>
           <span style={{ font: '400 11px IBM Plex Mono, monospace', color: '#7d8794' }}>{r.method}</span>
           <span style={{ textAlign: 'end', font: '400 11px IBM Plex Mono, monospace', color: '#7d8794' }}>{r.original_currency}</span>
           <span style={{ textAlign: 'end', font: '600 12.5px IBM Plex Mono, monospace', color: r.color }}>{r.amount}</span>
@@ -43,19 +55,20 @@ export default function TransactionsScreen({ data, currency, t, catFilter, query
       <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', font: '500 11.5px IBM Plex Mono, monospace', color: '#7d8794' }}>
         <span>Shown total</span><span>{sum.toFixed(2)}</span>
       </div>
-      {editingTx && <EditTxModal tx={editingTx} onClose={() => setEditingTx(null)} onSaved={() => { setEditingTx(null); refresh(); }} t={t} />}
+      {editingTx && <EditTxModal tx={editingTx} accounts={accounts} onClose={() => setEditingTx(null)} onSaved={() => { setEditingTx(null); refresh(); }} t={t} />}
       {editingSalaryId && <EditSalaryFromTxModal salaryId={editingSalaryId} onClose={() => setEditingSalaryId(null)} onSaved={() => { setEditingSalaryId(null); refresh(); }} t={t} />}
     </div>
   );
 }
 
-function EditTxModal({ tx, onClose, onSaved, t }: any) {
+function EditTxModal({ tx, accounts, onClose, onSaved, t }: any) {
   const [form, setForm] = useState({
     id: tx.id,
     date: tx.date || '',
     merchant: tx.merchant || '',
     category: tx.category || 'daily',
     method: tx.method || '',
+    account_id: tx.account_id || '',
     original_currency: tx.original_currency || 'USD',
     original_amount: tx.original_amount || 0,
     type: tx.type || 'spend',
@@ -64,13 +77,22 @@ function EditTxModal({ tx, onClose, onSaved, t }: any) {
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
+    if (!form.account_id) {
+      alert('Please select an account.');
+      return;
+    }
     setSaving(true);
     try {
-      await fetch('/api/transactions', {
+      const res = await fetch('/api/transactions', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, original_amount: parseFloat(form.original_amount) || 0 }),
+        body: JSON.stringify({ ...form, account_id: Number(form.account_id), original_amount: parseFloat(form.original_amount) || 0 }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to update');
+        return;
+      }
       onSaved();
     } catch (e) {
       console.error(e);
@@ -97,6 +119,13 @@ function EditTxModal({ tx, onClose, onSaved, t }: any) {
               <input value={form.original_amount} onChange={e => setForm({ ...form, original_amount: e.target.value })} type="number" style={{ width: '100%', height: 34, padding: '0 11px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px Space Grotesk, sans-serif', outline: 'none' }} />
             </div>
           </div>
+          <div>
+            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Account *</div>
+            <select value={form.account_id} onChange={e => setForm({ ...form, account_id: e.target.value })} style={{ width: '100%', height: 34, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }}>
+              <option value="">Select account</option>
+              {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+            </select>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Category</div>
@@ -115,7 +144,7 @@ function EditTxModal({ tx, onClose, onSaved, t }: any) {
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={onClose} disabled={saving} style={{ height: 32, padding: '0 14px', background: 'transparent', border: '1px solid #1e242c', color: '#e6edf3', borderRadius: 4, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={submit} disabled={saving} style={{ height: 32, padding: '0 16px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>Update</button>
+            <button onClick={submit} disabled={saving || !form.account_id} style={{ height: 32, padding: '0 16px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, cursor: 'pointer', opacity: saving || !form.account_id ? 0.6 : 1 }}>Update</button>
           </div>
         </div>
       </div>

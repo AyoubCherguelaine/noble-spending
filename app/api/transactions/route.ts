@@ -23,7 +23,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { date, merchant, category, method, original_currency, original_amount, type, note, salary_id } = body;
+    const { date, merchant, category, method, account_id, original_currency, original_amount, type, note, salary_id } = body;
+
+    if (!account_id) {
+      return NextResponse.json({ error: 'account_id is required. Every transaction must be linked to an account.' }, { status: 400 });
+    }
+
     const amount = parseFloat(original_amount);
     const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
     const settings: Record<string, string> = {};
@@ -31,10 +36,28 @@ export async function POST(request: Request) {
     const rates = getRates(settings);
     const converted = toUsd(amount, original_currency || 'USD', rates);
 
+    const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(account_id) as any;
+    if (!account) {
+      return NextResponse.json({ error: 'Invalid account_id' }, { status: 400 });
+    }
+
+    const effectiveCurrency = original_currency || account.currency || 'USD';
+
     const stmt = db.prepare(
-      'INSERT INTO transactions (date, merchant, category, method, original_currency, original_amount, converted_amount, type, note, salary_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO transactions (date, merchant, category, method, account_id, original_currency, original_amount, converted_amount, type, note, salary_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    const result = stmt.run(date, merchant.trim(), category, method || '', original_currency, amount, converted, type || 'spend', note || '', salary_id || '');
+    const result = stmt.run(date, merchant.trim(), category, method || '', account_id, effectiveCurrency, amount, converted, type || 'spend', note || '', salary_id || '');
+
+    const isTransfer = category === 'transfer' || method === 'transfer';
+    if (!isTransfer) {
+      const accountType = type || 'spend';
+      if (accountType === 'income') {
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(Math.abs(amount), account_id);
+      } else {
+        db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(Math.abs(amount), account_id);
+      }
+    }
+
     const row = db.prepare('SELECT * FROM transactions WHERE id = ?').get(result.lastInsertRowid);
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
@@ -46,7 +69,12 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, date, merchant, category, method, original_currency, original_amount, type, note, salary_id } = body;
+    const { id, date, merchant, category, method, account_id, original_currency, original_amount, type, note, salary_id } = body;
+
+    if (!account_id) {
+      return NextResponse.json({ error: 'account_id is required. Every transaction must be linked to an account.' }, { status: 400 });
+    }
+
     const amount = parseFloat(original_amount);
     const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
     const settings: Record<string, string> = {};
@@ -54,7 +82,39 @@ export async function PUT(request: Request) {
     const rates = getRates(settings);
     const converted = toUsd(amount, original_currency || 'USD', rates);
 
-    db.prepare('UPDATE transactions SET date = ?, merchant = ?, category = ?, method = ?, original_currency = ?, original_amount = ?, converted_amount = ?, type = ?, note = ?, salary_id = ? WHERE id = ?').run(date, merchant.trim(), category, method || '', original_currency, amount, converted, type || 'spend', note || '', salary_id || '', id);
+    const existing = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id) as any;
+
+    const isTransfer = category === 'transfer' || method === 'transfer';
+
+    if (existing?.account_id && !isTransfer) {
+      const oldType = existing.type || 'spend';
+      const oldAmount = Math.abs(existing.original_amount || 0);
+      if (oldType === 'income') {
+        db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(oldAmount, existing.account_id);
+      } else {
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(oldAmount, existing.account_id);
+      }
+    }
+
+    const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(account_id) as any;
+    if (!account) {
+      return NextResponse.json({ error: 'Invalid account_id' }, { status: 400 });
+    }
+
+    const effectiveCurrency = original_currency || account.currency || 'USD';
+
+    db.prepare('UPDATE transactions SET date = ?, merchant = ?, category = ?, method = ?, account_id = ?, original_currency = ?, original_amount = ?, converted_amount = ?, type = ?, note = ?, salary_id = ? WHERE id = ?')
+      .run(date, merchant.trim(), category, method || '', account_id, effectiveCurrency, amount, converted, type || 'spend', note || '', salary_id || '', id);
+
+    if (!isTransfer) {
+      const newType = type || 'spend';
+      if (newType === 'income') {
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(Math.abs(amount), account_id);
+      } else {
+        db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(Math.abs(amount), account_id);
+      }
+    }
+
     const row = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id);
 
     if (salary_id) {
@@ -77,8 +137,19 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
     const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id) as any;
-    if (tx && tx.salary_id) {
-      db.prepare('DELETE FROM salaries WHERE id = ?').run(tx.salary_id);
+    if (tx) {
+      if (tx.salary_id) {
+        db.prepare('DELETE FROM salaries WHERE id = ?').run(tx.salary_id);
+      }
+      if (tx.account_id && tx.category !== 'transfer' && tx.method !== 'transfer') {
+        const txType = tx.type || 'spend';
+        const txAmount = Math.abs(tx.original_amount || 0);
+        if (txType === 'income') {
+          db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(txAmount, tx.account_id);
+        } else {
+          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(txAmount, tx.account_id);
+        }
+      }
     }
     db.prepare('DELETE FROM transactions WHERE id = ?').run(id);
     return NextResponse.json({ success: true });

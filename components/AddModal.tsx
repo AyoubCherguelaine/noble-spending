@@ -90,9 +90,21 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [method, setMethod] = useState('');
   const [methodType, setMethodType] = useState('card');
+  const [accountId, setAccountId] = useState('');
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [entryCurrency, setEntryCurrency] = useState(currency || 'USD');
   const [saving, setSaving] = useState(false);
   const [suggestions, setSuggestions] = useState<{ merchants: string[]; methods: any[] }>({ merchants: [], methods: [] });
+
+  useEffect(() => {
+    fetch('/api/accounts').then(r => r.json()).then((rows: any[]) => {
+      setAccounts(rows);
+      if (rows.length > 0 && !accountId) {
+        const match = rows.find((a: any) => a.currency === (currency || 'USD'));
+        setAccountId(match ? String(match.id) : String(rows[0].id));
+      }
+    }).catch(() => {});
+  }, [currency]);
 
   useEffect(() => {
     if (merchant.length > 0) {
@@ -112,6 +124,8 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
     }).catch(() => {});
   }, []);
 
+  const selectedAccount = accounts.find((a: any) => String(a.id) === String(accountId));
+
   const isIncome = kind === 'income';
   const sign = isIncome ? '+' : '−';
   const preview = `${sign}${amount}`;
@@ -119,6 +133,10 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
 
   const submit = async () => {
     if (!merchant.trim()) return;
+    if (!accountId) {
+      alert('Please select an account for this transaction.');
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/transactions', {
@@ -129,12 +147,17 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
           merchant: merchant.trim(),
           category: isIncome ? 'income' : category,
           method: method || `${methodType}`,
-          original_currency: entryCurrency,
+          account_id: Number(accountId),
+          original_currency: selectedAccount?.currency || entryCurrency,
           original_amount: parseFloat(amount) * (isIncome ? 1 : -1),
           type: isIncome ? 'income' : 'spend',
         }),
       });
-      if (!res.ok) throw new Error('Failed to save');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to save');
+        return;
+      }
       await fetch('/api/merchants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -192,6 +215,16 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
                 </select>
               </div>
             </div>
+          </div>
+
+          <div>
+            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>ACCOUNT</div>
+            <select value={accountId} onChange={e => setAccountId(e.target.value)} style={{ width: '100%', height: 34, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px Space Grotesk, sans-serif', outline: 'none' }}>
+              <option value="">No account</option>
+              {accounts.map((a: any) => (
+                <option key={a.id} value={a.id}>{a.name} ({a.currency}) - {a.balance?.toFixed(2)}</option>
+              ))}
+            </select>
           </div>
 
           <div>

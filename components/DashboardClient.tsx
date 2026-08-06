@@ -9,10 +9,11 @@ import SpendingScreen from './SpendingScreen';
 import DebtsScreen from './DebtsScreen';
 import TransactionsScreen from './TransactionsScreen';
 import BudgetScreen from './BudgetScreen';
+import AccountsScreen from './AccountsScreen';
 import AddModal from './AddModal';
 import SettingsModal from './SettingsModal';
 
-type Screen = 'overview' | 'income' | 'spending' | 'debts' | 'tx' | 'budget';
+type Screen = 'overview' | 'income' | 'spending' | 'debts' | 'tx' | 'budget' | 'accounts';
 type Direction = 'terminal' | 'ledger' | 'canvas';
 type Currency = 'USD' | 'DA' | 'EUR';
 type Period = '1M' | '3M' | '6M' | '1Y';
@@ -22,9 +23,13 @@ interface DashboardData {
   salaries: any[]; services: any[]; subs: any[]; bills: any[];
   debtsOwe: any[]; debtsOwed: any[]; budgets: any[]; transactions: any[];
   txRows: any[];
-  totals: { totalIn: number; totalOut: number; rest: number; salaryTotal: number; serviceTotal: number; subsTotal: number; billsTotal: number; debtOweTot: number; debtOwedTot: number };
+  accounts: any[];
+  currencyTotals: Record<string, { balance: number; display: number }>;
+  totals: { totalIn: number; totalOut: number; totalOutWithoutDebt: number; rest: number; salaryTotal: number; serviceTotal: number; subsTotal: number; billsTotal: number; debtOweTot: number; debtOwedTot: number };
+  totalsDisplay: { salaryTotal: string; serviceTotal: string; subsTotal: string; billsTotal: string; debtOweTot: string; debtOwedTot: string };
   spendByCat: Record<string, number>;
   trend: { month: string; income: number; spend: number }[];
+  accountHistory: Record<string, { name: string; currency: string; monthly: { month: string; income: number; outcome: number; balance: number }[] }>;
   upcoming: { name: string; when: string; kind: string; amount: string; in: string }[];
 }
 
@@ -84,7 +89,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
     return dict[key] || key;
   };
 
-  const netLabel = data ? `${(data.totals.totalIn - data.totals.totalOut >= 0 ? '+' : '')}${data.totals.rest.toFixed(2)}` : '0.00';
+  const netLabel = data ? `${(data.totals.totalIn - data.totals.totalOutWithoutDebt >= 0 ? '+' : '')}${data.totals.rest.toFixed(2)}` : '0.00';
 
   return (
     <div dir="ltr" style={{ minHeight: '100vh', background: '#0b0d10', color: '#e6edf3', fontFamily: "'Space Grotesk',system-ui,sans-serif", display: 'grid', gridTemplateColumns: '228px 1fr' }}>
@@ -98,6 +103,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
           {screen === 'debts' && data && <DebtsScreen data={data} currency={displayCurrency} t={t} refresh={refresh} inputCurrency={inputCurrency} month={month} year={year} />}
           {screen === 'tx' && data && <TransactionsScreen data={data} currency={displayCurrency} t={t} catFilter={catFilter} query={query} refresh={refresh} inputCurrency={inputCurrency} />}
           {screen === 'budget' && data && <BudgetScreen data={data} currency={displayCurrency} t={t} refresh={refresh} inputCurrency={inputCurrency} month={month} year={year} />}
+          {screen === 'accounts' && data && <AccountsScreen data={data} currency={displayCurrency} t={t} refresh={refresh} />}
         </div>
       </main>
       {modalOpen && (
