@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Noble — Personal Finance Dashboard
 
-## Getting Started
+A clean, terminal-inspired personal finance dashboard built with Next.js, SQLite, and Tailwind CSS. Track money across multiple accounts, currencies (USD, EUR, DA), and time periods.
 
-First, run the development server:
+## Features
+
+### Multi-currency support
+- Track accounts in different currencies (USD, EUR, DA — Algerian Dinar)
+- Real-time currency conversion between accounts
+- Display totals in your preferred currency via settings
+
+### Overview screen
+- **Money flow chart** — 6-month income vs. spending trend with hover details
+- **Accounts history chart** — multi-line running balance chart per account with:
+  - Clickable data points for detailed drill-down (income, outcome, balance per month)
+  - Multi-select account filtering with color-coded badges
+  - Live count of visible accounts (`7 / 11`)
+- **Currency breakdown** — balances grouped by currency
+- **Quick stats** — money in, money out, net, debts owed/owed to you
+
+### Navigation
+- **Overview** — money flow charts, account history, recent activity, upcoming bills/debts
+- **Accounts** — all accounts grouped by currency, total balance
+- **Income** — filter by salary, income sources, or transactions
+- **Spending** — spending by category with visual bars, max spender highlighted
+- **Debts** — track what you owe and who owes you
+- **Transactions** — full transaction list with search
+
+### Data management
+- **Add transactions** — inline modal with merchant, amount, account, currency auto-detection
+- **Account transfers** — move money between accounts
+- **Salaries** — configure salary sources (fixed amount or linked to a transaction)
+- **Subscriptions, bills, debts** — recurring and one-off tracking
+- **Budgets** — set and track spending budgets per category
+
+### Technical
+- SQLite backend via `better-sqlite3`
+- Server-side data fetching with client hydration
+- SSR-compatible initial data loading
+- Pure CSS + Tailwind styling (no UI framework)
+- Recharts for visualizations
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to launch the dashboard.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+app/
+  page.tsx              — SSR entry point, initial data computation
+  api/data/             — SQLite-backed API routes
+    route.ts            — main data endpoint (accounts, transactions, totals, history)
+    transactions/       — CRUD transactions
+    accounts/           — account operations
+components/
+  DashboardClient.tsx   — client shell, screen navigation
+  OverviewScreen.tsx    — charts, money flow, account history
+  AccountHistoryChart   — interactive multi-line balance chart
+  AccountsScreen.tsx    — account list by currency
+  IncomeScreen.tsx      — income/spending breakdown
+  SpendingScreen.tsx    — category spending bars
+  DebtsScreen.tsx       — debt tracking
+  TransactionsScreen.tsx — transaction list
+  AddModal.tsx          — add transaction modal
+  Sidebar.tsx           — navigation
+  Header.tsx            — date navigation
+lib/
+  currency.ts           — formatting & conversion utilities
+  schema.ts             — SQLite schema & types
