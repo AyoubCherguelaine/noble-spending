@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 const COLORS: Record<string, string> = {
   housing: '#60a5fa', daily: '#34d399', online: '#f472b6', real: '#fbbf24',
@@ -8,8 +8,9 @@ const COLORS: Record<string, string> = {
 };
 
 export default function BudgetScreen({ data, currency, t, refresh, month, year }: any) {
-  const { budgets, spendByCat, budgetsDisplay } = data;
+  const { budgets, spendByCat, budgetsDisplay, activeAlerts = [] } = data;
   const [editingBudget, setEditingBudget] = useState<any>(null);
+  const alertMap = useMemo(() => new Map<string, any>((activeAlerts || []).map((a: any) => [a.category_key, a])), [activeAlerts]);
 
   return (
     <div style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4, overflow: 'hidden' }}>
@@ -24,11 +25,13 @@ export default function BudgetScreen({ data, currency, t, refresh, month, year }
         const over = actual > b.budget_amount;
         const bad = b.category_key === 'savings' ? actual < b.budget_amount : over;
         const displayBudget = (budgetsDisplay || []).find((d: any) => d.id === b.id);
+        const alert: any = alertMap.get(b.category_key);
         return (
-          <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '190px 1fr 96px 96px 74px', gap: 14, padding: '14px 16px', borderBottom: '1px solid #1e242c', alignItems: 'center' }}>
+          <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '190px 1fr 96px 96px 74px', gap: 14, padding: '14px 16px', borderBottom: '1px solid #1e242c', alignItems: 'center', background: alert?.over ? '#2a1215' : (alert as any)?.warning ? '#2a2412' : 'transparent' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: COLORS[b.category_key] || '#94a3b8', display: 'inline-block' }}></span>
               <span style={{ font: '500 12.5px Space Grotesk, sans-serif' }}>{b.category_key}</span>
+              {alert && <span style={{ font: '500 9px IBM Plex Mono, monospace', color: alert.over ? '#fb7185' : '#fbbf24' }}>{alert.over ? 'OVER' : 'WARN'}</span>}
             </div>
             <div style={{ position: 'relative', height: 9, background: '#1e242c', borderRadius: 5, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', insetInlineStart: 0, top: 0, height: '100%', width: `${Math.min(actual / Math.max(b.budget_amount, actual) * 100, 100)}%`, background: bad ? '#fb7185' : (COLORS[b.category_key] || '#4ade80'), borderRadius: 5 }}></div>

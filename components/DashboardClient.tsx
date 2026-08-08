@@ -34,6 +34,8 @@ interface DashboardData {
   accountHistory: Record<string, { name: string; currency: string; monthly: { month: string; income: number; outcome: number; balance: number }[] }>;
   accountHistoryDaily?: Record<string, { name: string; currency: string; daily: { day: string; income: number; outcome: number; balance: number }[] }>;
   upcoming: { name: string; when: string; kind: string; amount: string; in: string }[];
+  budgetAlerts: any[];
+  activeAlerts: any[];
 }
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -53,6 +55,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const [modalOpen, setModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [data, setData] = useState<DashboardData | null>(initialData);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const mountedRef = useRef(false);
 
@@ -101,9 +104,9 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
 
   return (
     <div dir="ltr" style={{ minHeight: '100vh', background: '#0b0d10', color: '#e6edf3', fontFamily: "'Space Grotesk',system-ui,sans-serif", display: 'grid', gridTemplateColumns: '228px 1fr' }}>
-      <Sidebar screen={screen} setScreen={setScreen} theme={theme} setTheme={setTheme} currency={displayCurrency} month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} totals={data?.totals} t={t} onOpenSettings={() => setSettingsOpen(true)} />
+      <Sidebar screen={screen} setScreen={setScreen} theme={theme} setTheme={setTheme} currency={displayCurrency} month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} totals={data?.totals} t={t} onOpenSettings={() => setSettingsOpen(true)} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <main style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <Header month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} netLabel={netLabel} query={query} setQuery={setQuery} onAdd={() => setModalOpen(true)} t={t} onLogout={logout} />
+        <Header month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} netLabel={netLabel} query={query} setQuery={setQuery} onAdd={() => setModalOpen(true)} t={t} onLogout={logout} activeAlerts={data?.activeAlerts} onToggleMobile={() => setMobileOpen(v => !v)} />
         <div style={{ padding: '22px 26px 60px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {screen === 'overview' && data && <OverviewScreen data={data} currency={displayCurrency} theme={theme} period={period} setPeriod={setPeriod} t={t} catFilter={catFilter} setCatFilter={setCatFilter} setScreen={setScreen} />}
           {screen === 'analytics' && <AnalyticsScreen data={data} currency={displayCurrency} t={t} onDrillDown={(filter: any) => {

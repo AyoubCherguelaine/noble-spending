@@ -35,6 +35,19 @@ export function initSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, category_key TEXT NOT NULL, budget_amount REAL NOT NULL,
       month INTEGER NOT NULL, year INTEGER NOT NULL, currency TEXT DEFAULT 'USD'
     );
+    CREATE TABLE IF NOT EXISTS recurring_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL DEFAULT 'spend', category TEXT NOT NULL,
+      method TEXT, account_id INTEGER, merchant TEXT NOT NULL, original_currency TEXT DEFAULT 'USD',
+      original_amount REAL NOT NULL, note TEXT, frequency TEXT NOT NULL DEFAULT 'monthly',
+      start_date TEXT, end_date TEXT, next_occurrence TEXT, last_generated_at TEXT,
+      active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS transaction_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'spend',
+      category TEXT NOT NULL, method TEXT, account_id INTEGER, merchant TEXT NOT NULL,
+      original_currency TEXT DEFAULT 'USD', original_amount REAL NOT NULL, note TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS payment_methods (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'card',
       details TEXT, icon TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -47,9 +60,12 @@ export function initSchema() {
     CREATE TABLE IF NOT EXISTS merchants (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, category TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
-    CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-    CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
-    CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+  CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
+  CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
+  CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+    CREATE INDEX IF NOT EXISTS idx_recurring_transactions_next_occurrence ON recurring_transactions(next_occurrence);
+    CREATE INDEX IF NOT EXISTS idx_recurring_transactions_active ON recurring_transactions(active);
+    CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(merchant, category, method, note, content=transactions, content_rowid=id);
   `);
 
   try {
@@ -138,5 +154,29 @@ export function initSchema() {
     }
   } catch (e) {
     console.error('Debt status migration failed:', e);
+  }
+
+  try {
+    db.exec(`CREATE TRIGGER IF NOT EXISTS transactions_ai AFTER INSERT ON transactions BEGIN
+      INSERT INTO transactions_fts(rowid, merchant, category, method, note) VALUES (new.id, new.merchant, new.category, new.method, new.note);
+    END;`);
+    db.exec(`CREATE TRIGGER IF NOT EXISTS transactions_ad AFTER DELETE ON transactions BEGIN
+      INSERT INTO transactions_fts(transactions_fts, rowid, merchant, category, method, note) VALUES ('delete', old.id, old.merchant, old.category, old.method, old.note);
+    END;`);
+    db.exec(`CREATE TRIGGER IF NOT EXISTS transactions_au AFTER UPDATE ON transactions BEGIN
+      INSERT INTO transactions_fts(transactions_fts, rowid, merchant, category, method, note) VALUES ('delete', old.id, old.merchant, old.category, old.method, old.note);
+      INSERT INTO transactions_fts(rowid, merchant, category, method, note) VALUES (new.id, new.merchant, new.category, new.method, new.note);
+    END;`);
+  } catch (e) {
+    console.error('FTS5 trigger creation failed:', e);
+  }
+
+  try {
+    const ftsInfo = db.pragma('table_info(transactions_fts)') as any[];
+    if (!ftsInfo.length) {
+      db.exec('INSERT INTO transactions_fts(rowid, merchant, category, method, note) SELECT id, merchant, category, method, note FROM transactions;');
+    }
+  } catch (e) {
+    console.error('FTS5 initial population failed:', e);
   }
 }

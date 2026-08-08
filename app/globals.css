@@ -34,3 +34,17 @@ body {
   to { opacity: 1; transform: none; }
 }
 .animate-fadeUp { animation: fadeUp .16s ease-out; }
+
+@media (max-width: 768px) {
+  body { padding: 0; }
+  header { padding: 10px 14px !important; gap: 10px !important; }
+  header > div[style*="flex"] { gap: 6px !important; }
+  input[type="text"], input[type="number"], input[type="date"], select {
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr !important; }
+  header { flex-wrap: wrap; }
+}

@@ -95,6 +95,10 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
   const [entryCurrency, setEntryCurrency] = useState(currency || 'USD');
   const [saving, setSaving] = useState(false);
   const [suggestions, setSuggestions] = useState<{ merchants: string[]; methods: any[] }>({ merchants: [], methods: [] });
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   useEffect(() => {
     fetch('/api/accounts').then(r => r.json()).then((rows: any[]) => {
@@ -105,6 +109,10 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
       }
     }).catch(() => {});
   }, [currency]);
+
+  useEffect(() => {
+    fetch('/api/templates').then(r => r.json()).then((rows: any[]) => setTemplates(rows)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (merchant.length > 0) {
@@ -130,6 +138,54 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
   const sign = isIncome ? '+' : '−';
   const preview = `${sign}${amount}`;
   const smartCats = getSmartSuggestions(merchant);
+
+  const saveTemplate = async () => {
+    if (!templateName.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const body: any = {
+        name: templateName.trim(),
+        type: isIncome ? 'income' : 'spend',
+        category: isIncome ? 'income' : category,
+        method: method || methodType,
+        account_id: accountId,
+        merchant: merchant.trim(),
+        original_currency: selectedAccount?.currency || entryCurrency,
+        original_amount: parseFloat(amount) || 0,
+        note: '',
+      };
+      await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      setTemplateName('');
+      const res = await fetch('/api/templates');
+      const rows = await res.json();
+      setTemplates(rows);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const applyTemplate = (tmpl: any) => {
+    setKind(tmpl.type === 'income' ? 'income' : 'spend');
+    setMerchant(tmpl.merchant);
+    setAmount(String(tmpl.original_amount));
+    setCategory(tmpl.category);
+    setMethod(tmpl.method || '');
+    setMethodType(tmpl.method || 'card');
+    if (tmpl.account_id) setAccountId(String(tmpl.account_id));
+    if (tmpl.original_currency) setEntryCurrency(tmpl.original_currency);
+    setShowTemplates(false);
+  };
+
+  const deleteTemplate = async (id: number) => {
+    await fetch(`/api/templates?id=${id}`, { method: 'DELETE' });
+    setTemplates(templates.filter(t => t.id !== id));
+  };
 
   const submit = async () => {
     if (!merchant.trim()) return;
@@ -183,9 +239,29 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
       <div onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: '100%', background: '#12151a', border: '1px solid #1e242c', borderRadius: 4, boxShadow: '0 24px 60px rgba(0,0,0,.5)', animation: 'fadeUp .16s ease-out' }}>
         <div style={{ padding: '16px 18px', borderBottom: '1px solid #1e242c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ font: '600 13.5px Space Grotesk, sans-serif' }}>{t('addTitle')}</span>
-          <button onClick={onClose} style={{ width: 26, height: 26, border: '1px solid #1e242c', background: 'transparent', color: '#7d8794', borderRadius: 4, cursor: 'pointer' }}>✕</button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button onClick={() => setShowTemplates(v => !v)} style={{ height: 26, padding: '0 10px', border: '1px solid #1e242c', background: showTemplates ? '#1e242c' : 'transparent', color: '#e6edf3', borderRadius: 4, cursor: 'pointer', font: '500 11px Space Grotesk, sans-serif' }}>Templates</button>
+            <button onClick={onClose} style={{ width: 26, height: 26, border: '1px solid #1e242c', background: 'transparent', color: '#7d8794', borderRadius: 4, cursor: 'pointer' }}>✕</button>
+          </div>
         </div>
         <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {showTemplates && (
+            <div style={{ background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, padding: 10, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+              <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em' }}>SAVED TEMPLATES</div>
+              {templates.length === 0 && <div style={{ font: '400 11px Space Grotesk, sans-serif', color: '#7d8794' }}>No templates yet. Fill the form and save one below.</div>}
+              {templates.map((tmpl: any) => (
+                <div key={tmpl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: '#12151a', border: '1px solid #1e242c', borderRadius: 4 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ font: '500 11.5px Space Grotesk, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tmpl.name}</div>
+                    <div style={{ font: '400 9.5px IBM Plex Mono, monospace', color: '#7d8794' }}>{tmpl.merchant} · {tmpl.category} · {tmpl.original_amount} {tmpl.original_currency}</div>
+                  </div>
+                  <button onClick={() => applyTemplate(tmpl)} style={{ padding: '2px 8px', border: '1px solid #2dd4bf', background: 'transparent', color: '#2dd4bf', borderRadius: 4, cursor: 'pointer', font: '500 10px IBM Plex Mono, monospace' }}>Use</button>
+                  <button onClick={() => deleteTemplate(tmpl.id)} style={{ padding: '2px 8px', border: '1px solid #fb7185', background: 'transparent', color: '#fb7185', borderRadius: 4, cursor: 'pointer', font: '500 10px IBM Plex Mono, monospace' }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 4, padding: 3, background: '#1e242c', borderRadius: 4 }}>
             {[['spend', 'Spend'], ['income', 'Income']].map(([id, label]) => (
               <button key={id} onClick={() => setKind(id)} style={{
@@ -283,6 +359,14 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#1e242c', borderRadius: 4 }}>
             <span style={{ font: '400 11.5px Space Grotesk, sans-serif', color: '#7d8794' }}>{t('preview')}</span>
             <span style={{ font: '600 14px IBM Plex Mono, monospace', color: isIncome ? '#4ade80' : '#e6edf3' }}>{preview}</span>
+          </div>
+
+          <div style={{ borderTop: '1px solid #1e242c', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em' }}>SAVE AS TEMPLATE</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="Template name (e.g. Weekly grocery)" style={{ flex: 1, height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
+              <button onClick={saveTemplate} disabled={savingTemplate || !templateName.trim()} style={{ height: 32, padding: '0 14px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, font: '600 12px Space Grotesk, sans-serif', cursor: 'pointer', opacity: savingTemplate || !templateName.trim() ? 0.6 : 1 }}>Save</button>
+            </div>
           </div>
         </div>
         <div style={{ padding: '14px 18px', borderTop: '1px solid #1e242c', display: 'flex', justifyContent: 'flex-end', gap: 9 }}>

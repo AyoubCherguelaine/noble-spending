@@ -7,7 +7,7 @@ import { hasUser } from '@/lib/auth';
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const publicPaths = ['/login', '/api/auth/login', '/api/auth/logout', '/setup', '/api/auth/setup', '/api/analytics'];
+  const publicPaths = ['/login', '/api/auth/login', '/api/auth/logout', '/setup', '/api/auth/setup', '/api/analytics', '/api/templates', '/api/cron/generate-recurring'];
   const isPublic = publicPaths.some(p => pathname === p || pathname.startsWith('/_next/') || pathname === '/favicon.ico');
 
   if (isPublic) {

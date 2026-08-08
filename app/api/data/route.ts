@@ -240,6 +240,23 @@ export async function GET(request: Request) {
     budget_amount_display: convertToDisplay(parseFloat(b.budget_amount), b.currency || 'USD', currency as any, rates),
   }));
 
+  const budgetAlerts = (budgets || []).map((b: any) => {
+    const actual = spendByCat[b.category_key] || 0;
+    const limit = parseFloat(b.budget_amount) || 0;
+    const pct = limit > 0 ? actual / limit : 0;
+    return {
+      id: b.id,
+      category_key: b.category_key,
+      actual,
+      limit,
+      pct,
+      over: pct >= 1,
+      warning: pct >= 0.8 && pct < 1,
+    };
+  });
+
+  const activeAlerts = budgetAlerts.filter(a => a.warning || a.over);
+
   const currencyTotals: Record<string, { balance: number; display: number }> = {};
   accounts.forEach((a: any) => {
     const cur = a.currency || 'USD';
@@ -285,5 +302,7 @@ export async function GET(request: Request) {
     accountHistoryDaily: Object.keys(accountHistoryDaily).length > 0 ? accountHistoryDaily : undefined,
     upcoming,
     budgetsDisplay,
+    budgetAlerts,
+    activeAlerts,
   });
 }

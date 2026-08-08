@@ -160,6 +160,8 @@ async function getInitialData() {
     trend,
     accountHistory,
     upcoming,
+    budgetAlerts: [],
+    activeAlerts: [],
   };
 }
 
