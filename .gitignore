@@ -48,3 +48,5 @@ data/*.jwt-secret
 .kilo
 
 .jwt-secret
+
+data/*

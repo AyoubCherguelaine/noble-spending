@@ -9,10 +9,27 @@ type Period = '1M' | '3M' | '6M' | '1Y';
 export default function OverviewScreen({ data, currency, theme, period, setPeriod, t, catFilter, setCatFilter, setScreen }: any) {
   const { totals, spendByCat, txRows, trend, upcoming = [], totalsDisplay, accounts = [], currencyTotals = {}, accountHistory = {} } = data;
 
+  const incomeTxs = txRows.filter((r: any) => r.amount.startsWith('+'));
+  const spendTxs = txRows.filter((r: any) => r.amount.startsWith('−') || (!r.amount.startsWith('+') && !r.amount.startsWith('+$')));
+  const avgIncome = incomeTxs.length > 0 ? incomeTxs.reduce((s: number, r: any) => s + parseFloat(r.amount.replace(/[^0-9.\-]/g, '')), 0) / incomeTxs.length : 0;
+  const avgSpend = spendTxs.length > 0 ? spendTxs.reduce((s: number, r: any) => s + Math.abs(parseFloat(r.amount.replace(/[^0-9.\-]/g, ''))), 0) / spendTxs.length : 0;
+  const topCat = Object.entries(spendByCat).sort((a: any, b: any) => (b[1] as number) - (a[1] as number))[0];
+  const totalAccountsBalance = Object.values(currencyTotals).reduce((s: number, c: any) => s + (c.display || 0), 0);
+  const biggestTx = txRows.length > 0 ? txRows.reduce((max: any, r: any) => {
+    const val = Math.abs(parseFloat(r.amount.replace(/[^0-9.\-]/g, '')));
+    const maxVal = Math.abs(parseFloat(max.amount.replace(/[^0-9.\-]/g, '')));
+    return val > maxVal ? r : max;
+  }) : null;
+
   const kpis = [
-    { label: 'MONEY IN', value: `${totalsDisplay?.salaryTotal || totals.totalIn.toFixed(2)}`, color: '#4ade80', delta: '+4.1%', sub: 'vs July' },
-    { label: 'MONEY OUT', value: `${totalsDisplay?.billsTotal || totals.totalOut.toFixed(2)}`, color: '#e6edf3', delta: '+1.8%', sub: 'vs July' },
+    { label: 'MONEY IN', value: `${totalsDisplay?.salaryTotal || totals.totalIn.toFixed(2)}`, color: '#4ade80', delta: incomeTxs.length > 0 ? `${incomeTxs.length} tx` : '0 tx', sub: 'this period' },
+    { label: 'MONEY OUT', value: `${totals.totalOut.toFixed(2)}`, color: '#e6edf3', delta: spendTxs.length > 0 ? `${spendTxs.length} tx` : '0 tx', sub: 'this period' },
     { label: 'NET', value: `${(totals.totalIn - totals.totalOutWithoutDebt).toFixed(2)}`, color: '#4ade80', delta: `${Math.round((totals.totalIn - totals.totalOutWithoutDebt) / Math.max(totals.totalIn, 1) * 100)}%`, sub: 'of income kept' },
+    { label: 'AVG INCOME', value: `+${avgIncome.toFixed(2)}`, color: '#4ade80', delta: 'per income tx', sub: incomeTxs.length > 0 ? `${incomeTxs.length} incoming` : 'no data' },
+    { label: 'AVG SPEND', value: `−${avgSpend.toFixed(2)}`, color: '#fb7185', delta: 'per spend tx', sub: spendTxs.length > 0 ? `${spendTxs.length} outgoing` : 'no data' },
+    { label: 'TOP CATEGORY', value: topCat ? topCat[0].toUpperCase() : '—', color: '#fbbf24', delta: topCat ? `${(topCat[1] as number).toFixed(2)}` : '0', sub: topCat ? 'highest spend' : 'no data' },
+    { label: 'TOTAL ACCOUNTS', value: `${accounts.length}`, color: '#60a5fa', delta: accounts.length > 0 ? 'active' : 'none', sub: totalAccountsBalance > 0 ? `balance ${formatMoney(totalAccountsBalance, currency)}` : 'no balance' },
+    { label: 'BIGGEST TX', value: biggestTx ? formatMoney(Math.abs(parseFloat(biggestTx.amount.replace(/[^0-9.\-]/g, ''))), currency) : '0.00', color: '#a78bfa', delta: biggestTx ? biggestTx.merchant.substring(0, 12) : '—', sub: biggestTx ? 'single transaction' : 'no data' },
     { label: 'I OWE', value: `${totalsDisplay?.debtOweTot || totals.debtOweTot.toFixed(2)}`, color: '#fb7185', delta: `${data.debtsOwe.length}`, sub: 'open debts' },
     { label: 'OWED TO ME', value: `${totalsDisplay?.debtOwedTot || totals.debtOwedTot.toFixed(2)}`, color: '#4ade80', delta: `${data.debtsOwed.length}`, sub: 'people' },
   ];
@@ -21,7 +38,11 @@ export default function OverviewScreen({ data, currency, theme, period, setPerio
   const showAccountBreakdown = accounts.length > 0 && accountCurrencies.length > 0;
 
   const periodMonths: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
-  const filteredTrend = (trend || []).slice(-(periodMonths[period] || 6));
+  const isDaily = period === '1M';
+  const slicedTrend = (trend || []).slice(-(periodMonths[period] || 6));
+  const filteredTrend = isDaily ? (trend || []) : slicedTrend;
+  const flowSubtitle = isDaily ? 'Hover a day to read its values' : 'Hover a month to read its values';
+  const xInterval = isDaily ? Math.max(1, Math.floor(filteredTrend.length / 6) - 1) : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -51,7 +72,7 @@ export default function OverviewScreen({ data, currency, theme, period, setPerio
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #1e242c', display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
           <div>
             <div style={{ font: '600 13.5px Space Grotesk, sans-serif' }}>{t('flow')}</div>
-            <div style={{ font: '400 11px Space Grotesk, sans-serif', color: '#7d8794' }}>Hover a month to read its values</div>
+            <div style={{ font: '400 11px Space Grotesk, sans-serif', color: '#7d8794' }}>{flowSubtitle}</div>
           </div>
           <button onClick={() => setScreen('accounts')} style={{ font: '500 10.5px IBM Plex Mono, monospace', color: '#2dd4bf', background: 'transparent', border: 'none', cursor: 'pointer' }}>View accounts →</button>
         </div>
@@ -59,7 +80,7 @@ export default function OverviewScreen({ data, currency, theme, period, setPerio
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={filteredTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e242c" />
-              <XAxis dataKey="month" stroke="#7d8794" style={{ fontSize: 12 }} />
+              <XAxis dataKey="label" stroke="#7d8794" style={{ fontSize: 12 }} interval={xInterval} />
               <YAxis stroke="#7d8794" style={{ fontSize: 12 }} />
               <Tooltip contentStyle={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4 }} labelStyle={{ color: '#e6edf3' }} itemStyle={{ color: '#e6edf3' }} />
               <Line type="monotone" dataKey="income" stroke="#4ade80" strokeWidth={2} dot={{ r: 4 }} />
@@ -69,7 +90,7 @@ export default function OverviewScreen({ data, currency, theme, period, setPerio
         </div>
       </div>
 
-      <AccountHistoryChart accountHistory={accountHistory} currency={currency} t={t} title="Accounts history" />
+      <AccountHistoryChart accountHistory={accountHistory} accountHistoryDaily={data.accountHistoryDaily} currency={currency} t={t} title="Accounts history" />
 
       {showAccountBreakdown && (
         <div style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4, padding: '14px 16px', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>

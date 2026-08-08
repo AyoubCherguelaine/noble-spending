@@ -196,7 +196,7 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 118px', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'start' }}>
             <div>
               <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>{t('merchant')}</div>
               <input value={merchant} onChange={e => setMerchant(e.target.value)} list="merchant-list" placeholder="Carrefour, Netflix…" style={{ width: '100%', height: 34, padding: '0 11px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px Space Grotesk, sans-serif', outline: 'none' }} />
@@ -206,11 +206,11 @@ export default function AddModal({ currency, onClose, onSaved, t }: any) {
                 ))}
               </datalist>
             </div>
-            <div>
+            <div style={{ minWidth: 0, maxWidth: 160 }}>
               <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>{t('amount')}</div>
               <div style={{ display: 'flex', gap: 4 }}>
-                <input value={amount} onChange={e => setAmount(e.target.value)} style={{ flex: 1, height: 34, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px IBM Plex Mono, monospace', outline: 'none' }} />
-                <select value={entryCurrency} onChange={e => setEntryCurrency(e.target.value)} style={{ width: 64, height: 34, padding: '0 4px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '600 10px IBM Plex Mono, monospace', outline: 'none' }}>
+                <input value={amount} onChange={e => setAmount(e.target.value)} style={{ flex: 1, height: 34, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12.5px IBM Plex Mono, monospace', outline: 'none', minWidth: 0 }} />
+                <select value={entryCurrency} onChange={e => setEntryCurrency(e.target.value)} style={{ width: 58, height: 34, padding: '0 4px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '600 10px IBM Plex Mono, monospace', outline: 'none' }}>
                   {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.value}</option>)}
                 </select>
               </div>

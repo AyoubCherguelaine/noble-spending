@@ -112,22 +112,32 @@ export async function GET(request: Request) {
   const period = url.searchParams.get('period') || '6M';
   const periodMonths = period === '1M' ? 1 : period === '3M' ? 3 : period === '1Y' ? 12 : 6;
 
-  const trend: { month: string; income: number; spend: number }[] = [];
-  for (let i = periodMonths - 1; i >= 0; i--) {
-    const d = new Date(year, month - 1 - i, 1);
-    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
-    const mmStr = String(d.getMonth() + 1).padStart(2, '0');
-    const monthKey = `${d.getFullYear()}-${mmStr}`;
+  const trend: { label: string; income: number; spend: number }[] = [];
 
-    const monthTransactions = db.prepare('SELECT * FROM transactions WHERE strftime(\'%Y-%m\', date) = ?').all(`${d.getFullYear()}-${mmStr}`);
-    const filteredForTrend = monthTransactions.filter((t: any) => t.category !== 'transfer' && t.method !== 'transfer');
-    const txIncome = filteredForTrend.filter((t: any) => t.type === 'income' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
-    const spend = filteredForTrend.filter((t: any) => t.type === 'spend' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
+  if (period === '1M') {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${monthStr}-${String(day).padStart(2, '0')}`;
+      const dayTxs = db.prepare('SELECT * FROM transactions WHERE date = ?').all(dateStr) as any[];
+      const filteredForDay = dayTxs.filter((t: any) => t.category !== 'transfer' && t.method !== 'transfer');
+      const txIncome = filteredForDay.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
+      const spend = filteredForDay.filter((t: any) => t.type === 'spend').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
 
-    const monthSalaries = db.prepare('SELECT * FROM salaries WHERE month = ? AND year = ?').all(d.getMonth() + 1, d.getFullYear());
-    const salaryIncome = monthSalaries.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.net || 0), s.currency || 'USD', currency, rates), 0);
+      trend.push({ label: `${MONTH_NAMES[month - 1]} ${day}`, income: txIncome, spend });
+    }
+  } else {
+    for (let i = periodMonths - 1; i >= 0; i--) {
+      const d = new Date(year, month - 1 - i, 1);
+      const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+      const mmStr = String(d.getMonth() + 1).padStart(2, '0');
 
-     trend.push({ month: label, income: txIncome + salaryIncome, spend });
+      const monthTransactions = db.prepare('SELECT * FROM transactions WHERE strftime(\'%Y-%m\', date) = ?').all(`${d.getFullYear()}-${mmStr}`);
+      const filteredForTrend = monthTransactions.filter((t: any) => t.category !== 'transfer' && t.method !== 'transfer');
+      const txIncome = filteredForTrend.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
+      const spend = filteredForTrend.filter((t: any) => t.type === 'spend').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
+
+      trend.push({ label, income: txIncome, spend });
+    }
   }
 
   const accounts = db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
@@ -183,6 +193,48 @@ export async function GET(request: Request) {
     };
   }
 
+  const accountHistoryDaily: Record<string, { name: string; currency: string; daily: { day: string; income: number; outcome: number; balance: number }[] }> = {};
+  if (period === '1M') {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    for (const acc of accounts) {
+      const accId = String(acc.id);
+      const accCurrency = acc.currency || 'USD';
+      const allTxForAccount = db.prepare('SELECT * FROM transactions WHERE account_id = ?').all(acc.id) as any[];
+      const totalNetOriginal = allTxForAccount.reduce((a: number, t: any) => a + (parseFloat(t.original_amount) || 0), 0);
+      const startingBalance = (parseFloat(acc.balance || 0)) - totalNetOriginal;
+
+      const dayMap: Record<string, { income: number; outcome: number }> = {};
+      for (let day = 1; day <= daysInMonth; day++) {
+        dayMap[String(day).padStart(2, '0')] = { income: 0, outcome: 0 };
+      }
+      allTxForAccount.forEach((t: any) => {
+        const dateStr = t.date;
+        if (!dateStr) return;
+        const [y, m, d] = dateStr.split('-');
+        if (parseInt(y) === year && parseInt(m) === month && dayMap[d]) {
+          const amt = parseFloat(t.original_amount) || 0;
+          if (amt > 0) dayMap[d].income += amt;
+          else dayMap[d].outcome += Math.abs(amt);
+        }
+      });
+
+      const daily: { day: string; income: number; outcome: number; balance: number }[] = [];
+      let running = startingBalance;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayKey = String(day).padStart(2, '0');
+        const entry = dayMap[dayKey] || { income: 0, outcome: 0 };
+        running += entry.income - entry.outcome;
+        daily.push({ day: `${MONTH_NAMES[month - 1]} ${day}`, income: entry.income, outcome: entry.outcome, balance: running });
+      }
+
+      accountHistoryDaily[accId] = {
+        name: acc.name,
+        currency: accCurrency,
+        daily,
+      };
+    }
+  }
+
   const budgetsDisplay = budgets.map((b: any) => ({
     ...b,
     budget_amount_display: convertToDisplay(parseFloat(b.budget_amount), b.currency || 'USD', currency as any, rates),
@@ -230,6 +282,7 @@ export async function GET(request: Request) {
     spendByCatRaw: spendByCat,
     trend,
     accountHistory,
+    accountHistoryDaily: Object.keys(accountHistoryDaily).length > 0 ? accountHistoryDaily : undefined,
     upcoming,
     budgetsDisplay,
   });

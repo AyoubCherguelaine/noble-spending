@@ -48,14 +48,14 @@ async function getInitialData() {
   const spendByCat: Record<string, number> = { housing: 0, daily: 0, online: 0, real: 0, subs: 0, transport: 0, debt: 0, savings: 0 };
   const monthTxs = transactions.filter((t: any) => t.date.startsWith(`${year}-${monthStr}`) && t.category !== 'transfer' && t.method !== 'transfer');
   monthTxs.forEach((t: any) => {
-    if (t.type === 'spend' && !t.salary_id && t.method !== 'Salary' && spendByCat[t.category] !== undefined) {
+    if (t.type === 'spend' && spendByCat[t.category] !== undefined) {
       spendByCat[t.category] += Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates));
     }
   });
   const totalOut = Object.values(spendByCat).reduce((a, b) => a + b, 0);
   const totalOutWithoutDebt = totalOut - (spendByCat.debt || 0);
-  const incomeTxTotal = monthTxs.filter((t: any) => t.type === 'income' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
-  const totalIn = salaryTotal + incomeTxTotal;
+  const incomeTxTotal = monthTxs.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
+  const totalIn = incomeTxTotal;
   const rest = totalIn - totalOutWithoutDebt;
 
   const txRows = transactions.map((t: any) => ({
@@ -113,7 +113,7 @@ async function getInitialData() {
     };
   });
 
-  const trend: { month: string; income: number; spend: number }[] = [];
+  const trend: { label: string; income: number; spend: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(year, month - 1 - i, 1);
     const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
@@ -121,13 +121,10 @@ async function getInitialData() {
 
     const monthTransactions = db.prepare('SELECT * FROM transactions WHERE strftime(\'%Y-%m\', date) = ?').all(`${d.getFullYear()}-${mmStr}`);
     const filteredForTrend = monthTransactions.filter((t: any) => t.category !== 'transfer' && t.method !== 'transfer');
-    const txIncome = filteredForTrend.filter((t: any) => t.type === 'income' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
-    const spend = filteredForTrend.filter((t: any) => t.type === 'spend' && !t.salary_id && t.method !== 'Salary').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
+    const txIncome = filteredForTrend.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
+    const spend = filteredForTrend.filter((t: any) => t.type === 'spend').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
 
-    const monthSalaries = db.prepare('SELECT * FROM salaries WHERE month = ? AND year = ?').all(d.getMonth() + 1, d.getFullYear());
-    const salaryIncome = monthSalaries.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.net || 0), s.currency || 'USD', currency, rates), 0);
-
-    trend.push({ month: label, income: txIncome + salaryIncome, spend });
+    trend.push({ label, income: txIncome, spend });
   }
 
   const upcoming: { name: string; when: string; kind: string; amount: string; in: string }[] = [];
@@ -142,7 +139,6 @@ async function getInitialData() {
     upcoming.push({ name: d.person, when: d.due || '', kind: 'Owed', amount: `+${d.remaining.toFixed(2)}`, in: d.due || '' });
   });
 
-  const displaySalaryTotal = formatMoney(salaryTotal, currency as any, true);
   const displayServiceTotal = formatMoney(serviceTotal, currency as any, true);
   const displaySubsTotal = formatMoney(subsTotal, currency as any, true);
   const displayBillsTotal = formatMoney(billsTotal, currency as any, true);
@@ -151,9 +147,9 @@ async function getInitialData() {
 
   return {
     settings, salaries, services, subs, bills, debtsOwe, debtsOwed, budgets, transactions, txRows, accounts, currencyTotals,
-    totals: { totalIn, totalOut, totalOutWithoutDebt, rest, salaryTotal, serviceTotal, subsTotal, billsTotal, debtOweTot, debtOwedTot },
+    totals: { totalIn, totalOut, totalOutWithoutDebt, rest, salaryTotal: totalIn, serviceTotal, subsTotal, billsTotal, debtOweTot, debtOwedTot },
     totalsDisplay: {
-      salaryTotal: displaySalaryTotal,
+      salaryTotal: formatMoney(totalIn, currency as any, true),
       serviceTotal: displayServiceTotal,
       subsTotal: displaySubsTotal,
       billsTotal: displayBillsTotal,

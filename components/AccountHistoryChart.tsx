@@ -37,8 +37,10 @@ function sharedTooltip({ active, payload, label }: any) {
 }
 
 
-export default function AccountHistoryChart({ accountHistory, currency, t, title, onPointClick }: any) {
-  const accountEntries = Object.entries(accountHistory || {});
+export default function AccountHistoryChart({ accountHistory, accountHistoryDaily, currency, t, title, onPointClick }: any) {
+  const isDaily = !!accountHistoryDaily && Object.keys(accountHistoryDaily).length > 0;
+  const source = isDaily ? accountHistoryDaily : accountHistory;
+  const accountEntries = Object.entries(source || {});
   const [showAll, setShowAll] = useState(true);
   const [selected, setSelected] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
@@ -98,15 +100,17 @@ export default function AccountHistoryChart({ accountHistory, currency, t, title
   const monthOrder: string[] = [];
 
   visibleEntries.forEach(([id, acc]: [string, any]) => {
-    acc.monthly.forEach((m: any) => {
-      if (!dataByMonth[m.month]) {
-        dataByMonth[m.month] = { month: m.month };
-        monthOrder.push(m.month);
+    const entries = isDaily ? acc.daily : acc.monthly;
+    entries.forEach((m: any) => {
+      const key = isDaily ? m.day : m.month;
+      if (!dataByMonth[key]) {
+        dataByMonth[key] = { month: key };
+        monthOrder.push(key);
       }
-      dataByMonth[m.month][`bal_${id}`] = m.balance;
-      dataByMonth[m.month][`inc_${id}`] = m.income;
-      dataByMonth[m.month][`out_${id}`] = m.outcome;
-      dataByMonth[m.month][`cur_${id}`] = acc.currency || 'USD';
+      dataByMonth[key][`bal_${id}`] = m.balance;
+      dataByMonth[key][`inc_${id}`] = m.income;
+      dataByMonth[key][`out_${id}`] = m.outcome;
+      dataByMonth[key][`cur_${id}`] = acc.currency || 'USD';
     });
   });
 
@@ -131,7 +135,7 @@ export default function AccountHistoryChart({ accountHistory, currency, t, title
       <div style={{ padding: '14px 18px', borderBottom: '1px solid #1e242c', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ font: '600 13.5px Space Grotesk, sans-serif' }}>{title || 'Accounts history'}</div>
-          <div style={{ font: '400 11px Space Grotesk, sans-serif', color: '#7d8794', marginTop: 3 }}>Running balance per month per account</div>
+          <div style={{ font: '400 11px Space Grotesk, sans-serif', color: '#7d8794', marginTop: 3 }}>{isDaily ? 'Running balance per day per account' : 'Running balance per month per account'}</div>
         </div>
          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
@@ -177,7 +181,7 @@ export default function AccountHistoryChart({ accountHistory, currency, t, title
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e242c" />
-            <XAxis dataKey="month" stroke="#7d8794" style={{ fontSize: 12 }} tickLine={false} interval={0} tickFormatter={(v: string) => v.replace(/ \d{4}$/, '\/$1')} />
+            <XAxis dataKey="month" stroke="#7d8794" style={{ fontSize: 12 }} tickLine={false} interval={isDaily ? Math.max(1, Math.floor(monthOrder.length / 6) - 1) : 0} tickFormatter={(v: string) => isDaily ? v.replace(/^(.*) \d+$/, '$1') : v.replace(/ \d{4}$/, '\/$1')} />
             <YAxis
               stroke="#7d8794"
               style={{ fontSize: 12 }}
@@ -226,7 +230,7 @@ export default function AccountHistoryChart({ accountHistory, currency, t, title
         </ResponsiveContainer>
       </div>
       <div style={{ padding: '10px 18px 12px', borderTop: '1px solid #1e242c', font: '400 10px IBM Plex Mono, monospace', color: '#7d8794' }}>
-        Lines show each account's running balance per month. Hover a point to see income/outcome/balance for that month. Click a point for account detail.
+        Lines show each account's running balance {isDaily ? 'per day' : 'per month'}. Hover a point to see income/outcome/balance for that {isDaily ? 'day' : 'month'}. Click a point for account detail.
       </div>
       {activePoint && (
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #1e242c' }}>

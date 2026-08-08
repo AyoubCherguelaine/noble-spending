@@ -13,7 +13,9 @@ import AccountsScreen from './AccountsScreen';
 import AddModal from './AddModal';
 import SettingsModal from './SettingsModal';
 
-type Screen = 'overview' | 'income' | 'spending' | 'debts' | 'tx' | 'budget' | 'accounts';
+import AnalyticsScreen from './AnalyticsScreen';
+
+type Screen = 'overview' | 'income' | 'spending' | 'debts' | 'tx' | 'budget' | 'accounts' | 'analytics';
 type Direction = 'terminal' | 'ledger' | 'canvas';
 type Currency = 'USD' | 'DA' | 'EUR';
 type Period = '1M' | '3M' | '6M' | '1Y';
@@ -28,8 +30,9 @@ interface DashboardData {
   totals: { totalIn: number; totalOut: number; totalOutWithoutDebt: number; rest: number; salaryTotal: number; serviceTotal: number; subsTotal: number; billsTotal: number; debtOweTot: number; debtOwedTot: number };
   totalsDisplay: { salaryTotal: string; serviceTotal: string; subsTotal: string; billsTotal: string; debtOweTot: string; debtOwedTot: string };
   spendByCat: Record<string, number>;
-  trend: { month: string; income: number; spend: number }[];
+  trend: { label: string; income: number; spend: number }[];
   accountHistory: Record<string, { name: string; currency: string; monthly: { month: string; income: number; outcome: number; balance: number }[] }>;
+  accountHistoryDaily?: Record<string, { name: string; currency: string; daily: { day: string; income: number; outcome: number; balance: number }[] }>;
   upcoming: { name: string; when: string; kind: string; amount: string; in: string }[];
 }
 
@@ -103,6 +106,12 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         <Header month={month} year={year} setMonth={setMonth} setYear={setYear} monthLabel={monthLabel} netLabel={netLabel} query={query} setQuery={setQuery} onAdd={() => setModalOpen(true)} t={t} onLogout={logout} />
         <div style={{ padding: '22px 26px 60px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {screen === 'overview' && data && <OverviewScreen data={data} currency={displayCurrency} theme={theme} period={period} setPeriod={setPeriod} t={t} catFilter={catFilter} setCatFilter={setCatFilter} setScreen={setScreen} />}
+          {screen === 'analytics' && <AnalyticsScreen data={data} currency={displayCurrency} t={t} onDrillDown={(filter: any) => {
+            if (filter.type === 'category') { setCatFilter(filter.value); setScreen('spending'); }
+            else if (filter.type === 'account') { setScreen('accounts'); }
+            else if (filter.type === 'method') { setScreen('tx'); }
+            else if (filter.type === 'time') { setScreen('overview'); }
+          }} />}
           {screen === 'income' && data && <IncomeScreen data={data} currency={displayCurrency} t={t} refresh={refresh} inputCurrency={inputCurrency} month={month} year={year} />}
           {screen === 'spending' && data && <SpendingScreen data={data} currency={displayCurrency} t={t} catFilter={catFilter} setCatFilter={setCatFilter} setScreen={setScreen} />}
           {screen === 'debts' && data && <DebtsScreen data={data} currency={displayCurrency} t={t} refresh={refresh} inputCurrency={inputCurrency} month={month} year={year} />}
