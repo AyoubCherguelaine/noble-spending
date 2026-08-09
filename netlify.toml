@@ -1,11 +1,20 @@
 [build.environment]
-  # DO NOT add JWT_SECRET here. It must only exist at runtime (Netlify Functions),
-  # otherwise Next.js inlines it into .next/ and Netlify's secrets scanner will
-  # fail the build.
+  # DO NOT add JWT_SECRET, AUTH_USERNAME, or AUTH_PASSWORD here. They must only
+  # exist at runtime (Netlify Functions), otherwise Next.js inlines them into
+  # .next/ and Netlify's secrets scanner will fail the build.
   #
   # Netlify setup:
-  #   1. Remove JWT_SECRET from Site settings → Build & deploy → Environment
-  #   2. Add JWT_SECRET under Site settings → Functions → Environment variables
+  #   1. Remove the "Builds" scope from JWT_SECRET, AUTH_USERNAME, and
+  #      AUTH_PASSWORD under Site configuration → Environment variables,
+  #      keeping only Functions and Runtime.
+  #   2. Rotate JWT_SECRET, AUTH_USERNAME, and AUTH_PASSWORD, since prior
+  #      build output that had the "Builds" scope enabled may have embedded
+  #      their values in compiled artifacts.
   #
-  # The code reads JWT_SECRET at runtime only via a dynamic path that the
-  # bundler cannot statically analyze.
+  # The code reads these at runtime only via a dynamic path (lib/jwt-secret.ts,
+  # getRuntimeEnv) that the bundler cannot statically analyze.
+  #
+  # Belt-and-suspenders: stock, unmodified npm packages copied into the
+  # standalone output can coincidentally contain short secret values as
+  # substrings and get flagged too, even though they never touch our code.
+  SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/standalone/node_modules/**"
