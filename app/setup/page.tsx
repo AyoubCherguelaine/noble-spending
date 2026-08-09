@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function SetupPage() {
   const [username, setUsername] = useState('');
@@ -8,6 +8,17 @@ export default function SetupPage() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/setup')
+      .then(r => r.json())
+      .then((data: { hasUser: boolean }) => {
+        if (data.hasUser) {
+          window.location.href = '/';
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

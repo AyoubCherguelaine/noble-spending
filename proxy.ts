@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getSecretFromFile, COOKIE_NAME } from '@/lib/jwt-secret';
-import { hasUser } from '@/lib/auth';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -12,11 +11,6 @@ export async function proxy(request: NextRequest) {
 
   if (isPublic) {
     return NextResponse.next();
-  }
-
-  if (!hasUser()) {
-    const setupUrl = new URL('/setup', request.url);
-    return NextResponse.redirect(setupUrl);
   }
 
   const token = request.cookies.get(COOKIE_NAME)?.value;

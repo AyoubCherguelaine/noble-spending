@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 function LoginForm() {
@@ -71,6 +71,17 @@ function LoginForm() {
 }
 
 export default function LoginClient() {
+  useEffect(() => {
+    fetch('/api/auth/setup')
+      .then(r => r.json())
+      .then((data: { hasUser: boolean }) => {
+        if (!data.hasUser) {
+          window.location.href = '/setup';
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0c0d10] text-[#e6edf3]">
       <Suspense fallback={<div className="w-full max-w-sm p-8 border border-[#1e2025] rounded-xl bg-[#111318] text-center text-sm text-[#8b949e]">Loading...</div>}>
