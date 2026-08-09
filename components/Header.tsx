@@ -1,6 +1,10 @@
 'use client';
 
+import { useState } from 'react';
+import NotificationPanel from './NotificationPanel';
+
 export default function Header({ month, year, setMonth, setYear, monthLabel, netLabel, query, setQuery, onAdd, t, onLogout, activeAlerts, onToggleMobile }: any) {
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const prevMonth = () => {
     if (month === 1) {
@@ -43,13 +47,14 @@ export default function Header({ month, year, setMonth, setYear, monthLabel, net
         </div>
         <button onClick={onAdd} style={{ height: 32, padding: '0 14px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, font: '600 12px Space Grotesk, sans-serif', cursor: 'pointer' }}>+ {t('add')}</button>
         {activeAlerts?.length > 0 && (
-          <div style={{
+          <button onClick={() => setShowNotifications(v => !v)} style={{
             position: 'relative', height: 32, padding: '0 10px', background: '#12151a', border: '1px solid #1e242c',
-            borderRadius: 4, font: '500 12px IBM Plex Mono, monospace', color: '#fbbf24', cursor: 'default'
+            borderRadius: 4, font: '500 12px IBM Plex Mono, monospace', color: '#fbbf24', cursor: 'pointer'
           }} title={`${activeAlerts.length} budget alert${activeAlerts.length > 1 ? 's' : ''}`}>
             ⚠ {activeAlerts.length}
-          </div>
+          </button>
         )}
+        {showNotifications && <NotificationPanel alerts={activeAlerts} onClose={() => setShowNotifications(false)} />}
         {onLogout && (
           <button onClick={onLogout} style={{ height: 32, padding: '0 12px', background: 'transparent', border: '1px solid #1e242c', color: '#7d8794', borderRadius: 4, font: '500 12px Space Grotesk, sans-serif', cursor: 'pointer' }}>Logout</button>
         )}

@@ -1,14 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatMoney } from '@/lib/currency';
 import AccountHistoryChart from './AccountHistoryChart';
+import ImportExportModal from './ImportExportModal';
 
 type Period = '1M' | '3M' | '6M' | '1Y';
 
 export default function OverviewScreen({ data, currency, theme, period, setPeriod, t, catFilter, setCatFilter, setScreen }: any) {
   const { totals, spendByCat, txRows, trend, upcoming = [], totalsDisplay, accounts = [], currencyTotals = {}, accountHistory = {} } = data;
-
+  const [showImportExport, setShowImportExport] = useState(false);
   const incomeTxs = txRows.filter((r: any) => r.amount.startsWith('+'));
   const spendTxs = txRows.filter((r: any) => r.amount.startsWith('−') || (!r.amount.startsWith('+') && !r.amount.startsWith('+$')));
   const avgIncome = incomeTxs.length > 0 ? incomeTxs.reduce((s: number, r: any) => s + parseFloat(r.amount.replace(/[^0-9.\-]/g, '')), 0) / incomeTxs.length : 0;
@@ -103,6 +105,16 @@ export default function OverviewScreen({ data, currency, theme, period, setPerio
           ))}
           <button onClick={() => setScreen('accounts')} style={{ marginLeft: 'auto', font: '500 10.5px IBM Plex Mono, monospace', color: '#2dd4bf', background: 'transparent', border: 'none', cursor: 'pointer' }}>Manage →</button>
         </div>
+      )}
+
+      <div style={{ background: '#12151a', border: '1px solid #1e242c', borderRadius: 4, padding: '14px 16px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.08em' }}>DATA</span>
+        <button onClick={() => { window.location.href = '/api/import-export?type=transactions&format=csv'; }} style={{ height: 30, padding: '0 12px', background: 'transparent', border: '1px solid #1e242c', color: '#e6edf3', borderRadius: 4, font: '500 11px Space Grotesk, sans-serif', cursor: 'pointer' }}>Export CSV</button>
+        <button onClick={() => setShowImportExport(v => !v)} style={{ height: 30, padding: '0 12px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, font: '600 11px Space Grotesk, sans-serif', cursor: 'pointer' }}>Import CSV</button>
+      </div>
+
+      {showImportExport && (
+        <ImportExportModal onClose={() => setShowImportExport(false)} onImported={() => { setShowImportExport(false); }} />
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: 16 }}>

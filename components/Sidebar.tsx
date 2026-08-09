@@ -6,9 +6,9 @@ const THEMES: Record<string, { name: string; short: string }> = {
 
 export default function Sidebar({ screen, setScreen, theme, setTheme, currency, month, year, setMonth, setYear, monthLabel, totals, t, onOpenSettings, mobileOpen, onMobileClose }: any) {
   const navItems = [
-    ['overview', t('overview'), '01', ''], ['analytics', 'Analytics', '02', ''], ['accounts', 'Accounts', '03', ''], ['income', t('income'), '04', totals ? `${totals.totalIn.toFixed(2)}` : ''],
-    ['spending', t('spending'), '05', totals ? `${totals.totalOut.toFixed(2)}` : ''], ['debts', t('debts'), '06', totals ? `${totals.debtOweTot.toFixed(2)}` : ''],
-    ['tx', t('tx'), '07', ''], ['budget', t('budget'), '08', ''],
+    ['overview', t('overview'), '01', ''], ['analytics', 'Analytics', '02', ''], ['recurring', 'Recurring', '03', ''], ['accounts', 'Accounts', '04', ''], ['income', t('income'), '05', totals ? `${totals.totalIn.toFixed(2)}` : ''],
+    ['spending', t('spending'), '06', totals ? `${totals.totalOut.toFixed(2)}` : ''], ['debts', t('debts'), '07', totals ? `${totals.debtOweTot.toFixed(2)}` : ''],
+    ['tx', t('tx'), '08', ''], ['budget', t('budget'), '09', ''],
   ];
 
   const content = (

@@ -21,14 +21,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { company, role, gross, net, payday, type, date, month, year, currency } = body;
+    const { company, role, gross, net, payday, type, date, month, year, currency, method } = body;
     if (!company?.trim() || !net) return NextResponse.json({ error: 'company and net are required' }, { status: 400 });
 
     const entryCurrency = currency || 'USD';
     const salaryDate = date || new Date().toISOString().split('T')[0];
     const salaryId = crypto.randomUUID();
-    const stmt = db.prepare('INSERT INTO salaries (id, company, role, gross, net, payday, type, date, currency, month, year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    stmt.run(salaryId, company.trim(), role || '', gross || 0, net, payday || '', type || '', salaryDate, entryCurrency, month || new Date().getMonth() + 1, year || new Date().getFullYear());
+    const stmt = db.prepare('INSERT INTO salaries (id, company, role, gross, net, payday, type, date, currency, month, year, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    stmt.run(salaryId, company.trim(), role || '', gross || 0, net, payday || '', type || '', salaryDate, entryCurrency, month || new Date().getMonth() + 1, year || new Date().getFullYear(), method || 'Salary');
     const row = db.prepare('SELECT * FROM salaries WHERE id = ?').get(salaryId);
 
     return NextResponse.json(row, { status: 201 });
@@ -40,10 +40,10 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, company, role, gross, net, payday, type, date, month, year, currency } = body;
+    const { id, company, role, gross, net, payday, type, date, month, year, currency, method } = body;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
     const entryCurrency = currency || 'USD';
-    db.prepare('UPDATE salaries SET company = ?, role = ?, gross = ?, net = ?, payday = ?, type = ?, date = ?, currency = ?, month = ?, year = ? WHERE id = ?').run(company, role, gross, net, payday, type, date, entryCurrency, month, year, id);
+    db.prepare('UPDATE salaries SET company = ?, role = ?, gross = ?, net = ?, payday = ?, type = ?, date = ?, currency = ?, month = ?, year = ?, method = ? WHERE id = ?').run(company, role, gross, net, payday, type, date, entryCurrency, month, year, method || 'Salary', id);
     const row = db.prepare('SELECT * FROM salaries WHERE id = ?').get(id);
 
     const tx = db.prepare('SELECT * FROM transactions WHERE salary_id = ?').get(id) as any;
@@ -55,7 +55,7 @@ export async function PUT(request: Request) {
       const amount = parseFloat(net);
       const converted = toUsd(amount, entryCurrency, rates);
       const salaryDate = date || tx.date;
-      db.prepare('UPDATE transactions SET date = ?, merchant = ?, original_currency = ?, original_amount = ?, converted_amount = ?, note = ? WHERE id = ?').run(salaryDate, company.trim(), entryCurrency, amount, converted, `Salary: ${type || 'Full-time'}`, tx.id);
+      db.prepare('UPDATE transactions SET date = ?, merchant = ?, method = ?, original_currency = ?, original_amount = ?, converted_amount = ?, note = ? WHERE id = ?').run(salaryDate, company.trim(), method || 'Salary', entryCurrency, amount, converted, `Salary: ${type || 'Full-time'}`, tx.id);
     }
 
     return NextResponse.json(row);

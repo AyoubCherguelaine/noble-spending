@@ -106,6 +106,10 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
   const today = new Date().toISOString().split('T')[0];
   const linkedTx = getTxForSalary ? getTxForSalary(salary?.id) : null;
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [salaryTemplates, setSalaryTemplates] = useState<any[]>([]);
+  const [showSalaryTemplates, setShowSalaryTemplates] = useState(false);
+  const [salaryTemplateName, setSalaryTemplateName] = useState('');
+  const [savingSalaryTemplate, setSavingSalaryTemplate] = useState(false);
   const [form, setForm] = useState(() => {
     const initial = salary || {};
     return {
@@ -120,9 +124,10 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
       month: initial.month || month || new Date().getMonth() + 1,
       year: initial.year || year || new Date().getFullYear(),
       account_id: linkedTx?.account_id || '',
-      txDate: linkedTx?.date || today,
       txAmount: linkedTx?.original_amount ?? initial.net ?? '',
       txNote: linkedTx?.note || `Salary: ${initial.type || 'Full-time'}`,
+      method: linkedTx?.method || initial.method || 'Salary',
+      created_at: initial.created_at || '',
     };
   });
   const [saving, setSaving] = useState(false);
@@ -130,6 +135,64 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
   useEffect(() => {
     fetch('/api/accounts').then(r => r.json()).then((rows: any[]) => setAccounts(rows)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch('/api/templates?type=income').then(r => r.json()).then((rows: any[]) => setSalaryTemplates(rows)).catch(() => {});
+  }, []);
+
+  const saveSalaryTemplate = async () => {
+    if (!salaryTemplateName.trim() || !form.company || !form.net) return;
+    setSavingSalaryTemplate(true);
+    try {
+      await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: salaryTemplateName.trim(),
+          type: 'income',
+          category: 'income',
+          merchant: form.company.trim(),
+          original_currency: form.currency,
+          original_amount: parseFloat(form.net) || 0,
+          note: form.txNote || '',
+          method: 'Salary',
+          account_id: form.account_id ? Number(form.account_id) : null,
+        }),
+      });
+      setSalaryTemplateName('');
+      const res = await fetch('/api/templates?type=income');
+      const rows = await res.json();
+      setSalaryTemplates(rows);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingSalaryTemplate(false);
+    }
+  };
+
+  const applySalaryTemplate = (tmpl: any) => {
+    setForm(prev => ({
+      ...prev,
+      company: tmpl.merchant || prev.company,
+      role: prev.role,
+      gross: tmpl.original_amount ?? prev.gross,
+      net: String(tmpl.original_amount ?? ''),
+      payday: prev.payday,
+      type: prev.type,
+      method: tmpl.method || prev.method,
+      currency: tmpl.original_currency || prev.currency,
+      month,
+      year,
+      account_id: tmpl.account_id ? String(tmpl.account_id) : prev.account_id,
+      txNote: tmpl.note || prev.txNote,
+    }));
+    setShowSalaryTemplates(false);
+  };
+
+  const deleteSalaryTemplate = async (id: number) => {
+    await fetch(`/api/templates?id=${id}`, { method: 'DELETE' });
+    setSalaryTemplates(salaryTemplates.filter(t => t.id !== id));
+  };
 
   useEffect(() => {
     if (!isEdit && form.company) {
@@ -150,12 +213,12 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
   const submit = async () => {
     setSaving(true);
     try {
-      const url = isEdit ? `/api/salaries?id=${salary.id}` : '/api/salaries';
+      const url = isEdit ? `/api/salaries` : '/api/salaries';
       const method = isEdit ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, gross: parseFloat(form.gross) || 0, net: parseFloat(form.net) }),
+        body: JSON.stringify({ ...form, id: isEdit ? salary.id : undefined, gross: parseFloat(form.gross) || 0, net: parseFloat(form.net) }),
       });
       const savedSalary = await res.json();
 
@@ -163,10 +226,10 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
       const txMethod = isEdit ? 'PUT' : 'POST';
       const txBody = isEdit ? {
         id: linkedTx?.id,
-        date: form.txDate,
+        date: form.date,
         merchant: form.company,
         category: 'income',
-        method: 'Salary',
+        method: form.method || 'Salary',
         account_id: form.account_id ? Number(form.account_id) : null,
         original_currency: form.currency,
         original_amount: parseFloat(form.txAmount) || parseFloat(form.net) || 0,
@@ -174,10 +237,10 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
         note: form.txNote,
         salary_id: savedSalary.id,
       } : {
-        date: form.txDate,
+        date: form.date,
         merchant: form.company,
         category: 'income',
-        method: 'Salary',
+        method: form.method || 'Salary',
         account_id: form.account_id ? Number(form.account_id) : null,
         original_currency: form.currency,
         original_amount: parseFloat(form.txAmount) || parseFloat(form.net) || 0,
@@ -201,6 +264,27 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
 
   return (
     <div style={{ padding: 14, borderBottom: '1px solid #1e242c', background: '#1a1f27', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={() => setShowSalaryTemplates(v => !v)} style={{ height: 28, padding: '0 10px', border: '1px solid #1e242c', background: showSalaryTemplates ? '#1e242c' : 'transparent', color: '#e6edf3', borderRadius: 4, cursor: 'pointer', font: '500 11px Space Grotesk, sans-serif' }}>Salary templates</button>
+        <div style={{ display: 'flex', gap: 4, flex: 1, minWidth: 0 }}>
+          <input value={salaryTemplateName} onChange={e => setSalaryTemplateName(e.target.value)} placeholder="New template name" style={{ flex: 1, height: 28, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 11px Space Grotesk, sans-serif', outline: 'none' }} />
+          <button onClick={saveSalaryTemplate} disabled={savingSalaryTemplate || !salaryTemplateName.trim() || !form.company || !form.net} style={{ height: 28, padding: '0 10px', background: '#2dd4bf', color: '#06251f', border: 'none', borderRadius: 4, cursor: 'pointer', font: '600 11px Space Grotesk, sans-serif', opacity: savingSalaryTemplate || !salaryTemplateName.trim() || !form.company || !form.net ? 0.6 : 1 }}>Save</button>
+        </div>
+      </div>
+      {showSalaryTemplates && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0', borderTop: '1px solid #1e242c' }}>
+          {salaryTemplates.length === 0 && <div style={{ font: '400 11px Space Grotesk, sans-serif', color: '#7d8794' }}>No salary templates yet. Fill the form and save one above.</div>}
+          {salaryTemplates.map((tmpl: any) => (
+            <div key={tmpl.id} style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ font: '400 12px Space Grotesk, sans-serif', color: '#e6edf3' }}>{tmpl.name} <span style={{ color: '#7d8794', font: '400 11px IBM Plex Mono, monospace' }}>{tmpl.merchant} · {tmpl.original_currency} {Number(tmpl.original_amount).toFixed(2)}</span></div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => applySalaryTemplate(tmpl)} style={{ padding: '2px 8px', border: '1px solid #2dd4bf', background: 'transparent', color: '#2dd4bf', borderRadius: 4, cursor: 'pointer', font: '500 10px IBM Plex Mono, monospace' }}>Use</button>
+                <button onClick={() => deleteSalaryTemplate(tmpl.id)} style={{ padding: '2px 8px', border: '1px solid #fb7185', background: 'transparent', color: '#fb7185', borderRadius: 4, cursor: 'pointer', font: '500 10px IBM Plex Mono, monospace' }}>×</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} list="company-list" placeholder="Company" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
         <datalist id="company-list">
@@ -208,6 +292,9 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
         </datalist>
         <input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="Role" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
       </div>
+      {isEdit && form.created_at && (
+        <div style={{ font: '400 10px IBM Plex Mono, monospace', color: '#7d8794' }}>Created: {form.created_at}</div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
         <input value={form.gross} onChange={e => setForm({ ...form, gross: e.target.value })} placeholder="Gross" type="number" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
         <input value={form.net} onChange={e => setForm({ ...form, net: e.target.value })} placeholder="Net" type="number" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
@@ -220,7 +307,17 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
         <input value={form.payday} onChange={e => setForm({ ...form, payday: e.target.value })} placeholder="Payday" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
         <input value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="Type" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
-        <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
+        <select value={form.method} onChange={e => setForm({ ...form, method: e.target.value })} style={{ height: 32, padding: '0 8px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '600 10px IBM Plex Mono, monospace', outline: 'none' }}>
+          <option value="Salary">Salary</option>
+          <option value="Bank transfer">Bank transfer</option>
+          <option value="Cash">Cash</option>
+          <option value="Check">Check</option>
+        </select>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+        <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} placeholder="Date" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
+        <input value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} placeholder="Month" type="number" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
+        <input value={form.year} onChange={e => setForm({ ...form, year: e.target.value })} placeholder="Year" type="number" style={{ height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
       </div>
       <div>
         <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>SOURCE ACCOUNT *</div>
@@ -234,17 +331,13 @@ function SalaryForm({ salary, companies, getLastSalaryForCompany, getTxForSalary
           <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em' }}>LINKED TRANSACTION</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Tx Date</div>
-              <input type="date" value={form.txDate} onChange={e => setForm({ ...form, txDate: e.target.value })} style={{ width: '100%', height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
-            </div>
-            <div>
               <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Amount</div>
               <input type="number" value={form.txAmount} onChange={e => setForm({ ...form, txAmount: e.target.value })} style={{ width: '100%', height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px IBM Plex Mono, monospace', outline: 'none' }} />
             </div>
-          </div>
-          <div>
-            <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Note</div>
-            <input value={form.txNote} onChange={e => setForm({ ...form, txNote: e.target.value })} style={{ width: '100%', height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
+            <div>
+              <div style={{ font: '500 9.5px IBM Plex Mono, monospace', color: '#7d8794', letterSpacing: '.07em', marginBottom: 6 }}>Note</div>
+              <input value={form.txNote} onChange={e => setForm({ ...form, txNote: e.target.value })} style={{ width: '100%', height: 32, padding: '0 10px', background: '#0b0d10', border: '1px solid #1e242c', borderRadius: 4, color: '#e6edf3', font: '400 12px Space Grotesk, sans-serif', outline: 'none' }} />
+            </div>
           </div>
         </div>
       )}

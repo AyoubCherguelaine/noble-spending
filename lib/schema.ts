@@ -13,7 +13,8 @@ export function initSchema() {
     );
     CREATE TABLE IF NOT EXISTS salaries (
       id TEXT PRIMARY KEY, company TEXT NOT NULL, role TEXT, gross REAL, net REAL NOT NULL,
-      payday TEXT, type TEXT, date TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL
+      payday TEXT, type TEXT, date TEXT, currency TEXT DEFAULT 'USD', month INTEGER NOT NULL, year INTEGER NOT NULL,
+      method TEXT DEFAULT 'Salary', created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS services (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT, terms TEXT, amount REAL NOT NULL,
@@ -87,6 +88,15 @@ export function initSchema() {
     }
   } catch (e) {
     console.error('Salary UUID migration failed:', e);
+  }
+
+  try {
+    const salaryInfo = db.pragma('table_info(salaries)') as any[];
+    if (!salaryInfo.some((c: any) => c.name === 'method')) {
+      db.exec("ALTER TABLE salaries ADD COLUMN method TEXT DEFAULT 'Salary';");
+    }
+  } catch (e) {
+    console.error('Salary method migration failed:', e);
   }
 
   try {
