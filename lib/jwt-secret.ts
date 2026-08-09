@@ -4,9 +4,13 @@ const COOKIE_NAME = 'session';
 const TOKEN_EXPIRY = '7d';
 const SECRET_FILE = '.jwt-secret';
 
+export function getRuntimeEnv(name: string): string {
+  const runtimeEnv = (0, eval)('process.env')[name];
+  return typeof runtimeEnv === 'string' ? runtimeEnv : '';
+}
+
 export function getSecretFromFile(): string {
-  const runtimeEnv = (0, eval)('process.env.JWT_SECRET');
-  const envSecret = typeof runtimeEnv === 'string' ? runtimeEnv : '';
+  const envSecret = getRuntimeEnv('JWT_SECRET');
   if (envSecret.length > 0) {
     return envSecret;
   }
