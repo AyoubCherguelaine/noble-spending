@@ -51,7 +51,7 @@ export function initSchema() {
     );
     CREATE TABLE IF NOT EXISTS payment_methods (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'card',
-      details TEXT, icon TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      details TEXT, icon TEXT, network TEXT, last4 TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
@@ -59,7 +59,38 @@ export function initSchema() {
       details TEXT, icon TEXT, balance REAL DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS merchants (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, category TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, category TEXT,
+      osm_id TEXT, osm_type TEXT, address TEXT, latitude REAL, longitude REAL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS external_cache (
+      provider TEXT NOT NULL,
+      cache_key TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      fetched_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      PRIMARY KEY (provider, cache_key)
+    );
+    CREATE TABLE IF NOT EXISTS purchase_candidates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      external_id TEXT NOT NULL,
+      merchant TEXT,
+      purchase_date TEXT,
+      amount REAL,
+      currency TEXT,
+      card_last4 TEXT,
+      matched_method_id INTEGER,
+      category TEXT,
+      note TEXT,
+      confidence REAL DEFAULT 0,
+      raw_text TEXT,
+      place_id TEXT,
+      latitude REAL,
+      longitude REAL,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(source, external_id)
     );
   CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
@@ -131,7 +162,52 @@ export function initSchema() {
   }
 
   const addCurrencyIfMissing = (table: string) => {
-    try {
+  try {
+    const pmInfo = db.pragma('table_info(payment_methods)') as any[];
+    if (!pmInfo.some((c: any) => c.name === 'network')) {
+      db.exec('ALTER TABLE payment_methods ADD COLUMN network TEXT;');
+    }
+    if (!pmInfo.some((c: any) => c.name === 'last4')) {
+      db.exec('ALTER TABLE payment_methods ADD COLUMN last4 TEXT;');
+    }
+  } catch (e) {
+    console.error('Payment methods network/last4 migration failed:', e);
+  }
+
+  try {
+    const merchInfo = db.pragma('table_info(merchants)') as any[];
+    if (!merchInfo.some((c: any) => c.name === 'osm_id')) {
+      db.exec('ALTER TABLE merchants ADD COLUMN osm_id TEXT;');
+    }
+    if (!merchInfo.some((c: any) => c.name === 'osm_type')) {
+      db.exec('ALTER TABLE merchants ADD COLUMN osm_type TEXT;');
+    }
+    if (!merchInfo.some((c: any) => c.name === 'address')) {
+      db.exec('ALTER TABLE merchants ADD COLUMN address TEXT;');
+    }
+    if (!merchInfo.some((c: any) => c.name === 'latitude')) {
+      db.exec('ALTER TABLE merchants ADD COLUMN latitude REAL;');
+    }
+    if (!merchInfo.some((c: any) => c.name === 'longitude')) {
+      db.exec('ALTER TABLE merchants ADD COLUMN longitude REAL;');
+    }
+  } catch (e) {
+    console.error('Merchants OSM/location migration failed:', e);
+  }
+
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_purchase_candidates_source_external ON purchase_candidates(source, external_id);');
+  } catch (e) {
+    console.error('Purchase candidates source/external index creation failed:', e);
+  }
+
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_purchase_candidates_status ON purchase_candidates(status);');
+  } catch (e) {
+    console.error('Purchase candidates status index creation failed:', e);
+  }
+
+  try {
       const info = db.pragma(`table_info(${table})`) as any[];
       if (!info.some((c: any) => c.name === 'currency')) {
         db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT DEFAULT 'USD';`);

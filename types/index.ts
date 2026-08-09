@@ -14,8 +14,59 @@ export interface Subscription { id: number; name: string; plan: string; cost: nu
 export interface Bill { id: number; name: string; cost: number; average: number; month: number; year: number; }
 export interface Debt { id: number; person: string; type: string; total: number; remaining: number; due: string; note: string; month: number; year: number; }
 export interface Budget { id: number; category_key: string; budget_amount: number; month: number; year: number; }
+export interface PaymentMethod {
+  id: number; name: string; type: string; details: string; icon: string;
+  network?: string; last4?: string;
+}
+export interface Merchant {
+  id: number; name: string; category?: string;
+  osmId?: string; osmType?: string; address?: string; latitude?: number; longitude?: number;
+}
 export type Screen = 'overview' | 'income' | 'spending' | 'debts' | 'tx' | 'budget' | 'accounts';
 export type Direction = 'terminal' | 'ledger' | 'canvas';
 export type Language = 'en' | 'ar';
 export type Currency = 'USD' | 'DA' | 'EUR';
 export interface Settings { direction: Direction; language: Language; currency: Currency; month: number; }
+
+export interface PurchaseCandidate {
+  source: 'gmail' | 'ocr';
+  externalId: string;
+  merchant?: string;
+  purchaseDate?: string;
+  amount?: number;
+  currency?: string;
+  cardLast4?: string;
+  matchedMethodId?: number;
+  category?: string;
+  note?: string;
+  confidence: number;
+  rawText?: string;
+  placeId?: string;
+  latitude?: number;
+  longitude?: number;
+  status?: string;
+}
+
+export interface MarketQuote {
+  symbol: string;
+  name: string;
+  category: 'metal' | 'energy' | 'index';
+  price: number;
+  currency: string;
+  unit?: string;
+  change?: number;
+  changePercent?: number;
+  asOf: string;
+  source: string;
+  delayed: boolean;
+}
+
+export interface MarketPoint {
+  date: string;
+  price: number;
+}
+
+export interface MarketProvider {
+  getQuotes(): Promise<MarketQuote[]>;
+  getHistory(symbol: string, range: string): Promise<MarketPoint[]>;
+}

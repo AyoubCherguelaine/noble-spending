@@ -8,7 +8,7 @@ export default function Sidebar({ screen, setScreen, theme, setTheme, currency, 
   const navItems = [
     ['overview', t('overview'), '01', ''], ['analytics', 'Analytics', '02', ''], ['recurring', 'Recurring', '03', ''], ['accounts', 'Accounts', '04', ''], ['income', t('income'), '05', totals ? `${totals.totalIn.toFixed(2)}` : ''],
     ['spending', t('spending'), '06', totals ? `${totals.totalOut.toFixed(2)}` : ''], ['debts', t('debts'), '07', totals ? `${totals.debtOweTot.toFixed(2)}` : ''],
-    ['tx', t('tx'), '08', ''], ['budget', t('budget'), '09', ''],
+    ['tx', t('tx'), '08', ''], ['budget', t('budget'), '09', ''], ['markets', 'Markets', '10', ''],
   ];
 
   const content = (

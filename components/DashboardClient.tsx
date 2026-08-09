@@ -16,8 +16,9 @@ import SettingsModal from './SettingsModal';
 import AnalyticsScreen from './AnalyticsScreen';
 import RecurringScreen from './RecurringScreen';
 import KeyboardShortcuts from './KeyboardShortcuts';
+import MarketsScreen from './MarketsScreen';
 
-type Screen = 'overview' | 'income' | 'spending' | 'debts' | 'tx' | 'budget' | 'accounts' | 'analytics' | 'recurring';
+type Screen = 'overview' | 'income' | 'spending' | 'debts' | 'tx' | 'budget' | 'accounts' | 'analytics' | 'recurring' | 'markets';
 type Direction = 'terminal' | 'ledger' | 'canvas';
 type Currency = 'USD' | 'DA' | 'EUR';
 type Period = '1M' | '3M' | '6M' | '1Y';
@@ -90,7 +91,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const t = (key: string) => {
     const dict: Record<string, string> = {
       overview: 'Overview', income: 'Income', spending: 'Spending', debts: 'Debts',
-      tx: 'Transactions', budget: 'Budget', net: 'NET THIS MONTH', add: 'Add',
+      tx: 'Transactions', budget: 'Budget', markets: 'Markets', net: 'NET THIS MONTH', add: 'Add',
       flow: 'Money flow', recent: 'Recent activity', all: 'All', upcoming: 'Upcoming & due',
       search: 'Search merchant, category…', save: 'Save', cancel: 'Cancel',
       addTitle: 'Add a movement', preview: 'This will record',
@@ -135,6 +136,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
           {screen === 'tx' && data && <TransactionsScreen data={data} currency={displayCurrency} t={t} catFilter={catFilter} query={query} refresh={refresh} inputCurrency={inputCurrency} />}
           {screen === 'budget' && data && <BudgetScreen data={data} currency={displayCurrency} t={t} refresh={refresh} inputCurrency={inputCurrency} month={month} year={year} />}
           {screen === 'accounts' && data && <AccountsScreen data={data} currency={displayCurrency} t={t} refresh={refresh} />}
+          {screen === 'markets' && <MarketsScreen t={t} />}
         </div>
       </main>
       {modalOpen && (
