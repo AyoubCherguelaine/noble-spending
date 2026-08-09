@@ -1,2 +1,11 @@
 [build.environment]
-  SECRETS_SCAN_OMIT_KEYS = "JWT_SECRET"
+  # DO NOT add JWT_SECRET here. It must only exist at runtime (Netlify Functions),
+  # otherwise Next.js inlines it into .next/ and Netlify's secrets scanner will
+  # fail the build.
+  #
+  # Netlify setup:
+  #   1. Remove JWT_SECRET from Site settings → Build & deploy → Environment
+  #   2. Add JWT_SECRET under Site settings → Functions → Environment variables
+  #
+  # The code reads JWT_SECRET at runtime only via a dynamic path that the
+  # bundler cannot statically analyze.
