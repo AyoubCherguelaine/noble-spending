@@ -1,13 +1,14 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { jwtVerify } from 'jose';
 
 const COOKIE_NAME = 'session';
 const TOKEN_EXPIRY = '7d';
 const SECRET_FILE = '.jwt-secret';
-const ENV_SECRET = process.env.JWT_SECRET;
 
 export function getSecretFromFile(): string {
-  if (ENV_SECRET && ENV_SECRET.length > 0) {
-    return ENV_SECRET;
+  const runtimeEnv = (0, eval)('process.env.JWT_SECRET');
+  const envSecret = typeof runtimeEnv === 'string' ? runtimeEnv : '';
+  if (envSecret.length > 0) {
+    return envSecret;
   }
   const path = require('path');
   const fs = require('fs');
