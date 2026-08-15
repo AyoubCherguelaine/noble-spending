@@ -74,7 +74,7 @@ On first visit, you'll be redirected to `/setup` to create your account:
 ```bash
 curl -s -X POST http://localhost:3000/api/auth/setup \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"securepass"}'
+  -d '{"username":"<your-username>","password":"<your-password>"}'
 ```
 
 ## Configuration
@@ -83,12 +83,12 @@ Copy `.env.example` to `.env` and adjust:
 
 ```env
 JWT_SECRET=your-64-char-hex-secret-here
-AUTH_USERNAME=user
-AUTH_PASSWORD=12345678
+AUTH_USERNAME=
+AUTH_PASSWORD=
 ```
 
 - `JWT_SECRET` — 64-character hex string for signing JWTs. If omitted, a random secret is generated and stored in `.jwt-secret`.
-- `AUTH_USERNAME` / `AUTH_PASSWORD` — default credentials on first run. Ignored if a user already exists.
+- `AUTH_USERNAME` / `AUTH_PASSWORD` — optional credentials used to seed the first account. If omitted, create the account through `/setup`.
 
 ## Project structure
 
