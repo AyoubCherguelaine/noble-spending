@@ -3,7 +3,10 @@ import { getSecretFromFile, getRuntimeEnv, COOKIE_NAME, TOKEN_EXPIRY } from './j
 import { db } from './db';
 import nodeCrypto from 'node:crypto';
 
+const RUNTIME_PASSWORD_PREFIX = 'runtime:';
+
 function seedCredentials() {
+  if (getRuntimeEnv('AUTH_USERNAME') && getRuntimeEnv('AUTH_PASSWORD')) return;
   const existing = db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
   if (!existing) {
     const defaultUsername = getRuntimeEnv('AUTH_USERNAME');
@@ -34,6 +37,11 @@ function hashPasswordSync(password: string): string {
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   try {
+    if (hash.startsWith(RUNTIME_PASSWORD_PREFIX)) {
+      const expected = Buffer.from(hash.slice(RUNTIME_PASSWORD_PREFIX.length));
+      const actual = Buffer.from(password);
+      return expected.length === actual.length && nodeCrypto.timingSafeEqual(expected, actual);
+    }
     const buf = Buffer.from(hash, 'hex');
     const salt = buf.subarray(0, 16);
     const storedKey = buf.subarray(16);
@@ -49,6 +57,12 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function getCredentials(): { username: string; passwordHash: string } | null {
+  const runtimeUsername = getRuntimeEnv('AUTH_USERNAME');
+  const runtimePassword = getRuntimeEnv('AUTH_PASSWORD');
+  if (runtimeUsername && runtimePassword) {
+    return { username: runtimeUsername, passwordHash: `${RUNTIME_PASSWORD_PREFIX}${runtimePassword}` };
+  }
+
   seedCredentials();
   const rows = db.prepare("SELECT key, value FROM settings WHERE key IN ('auth_username','auth_password_hash')").all() as { key: string; value: string }[];
   const map: Record<string, string> = {};

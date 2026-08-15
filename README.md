@@ -89,6 +89,8 @@ AUTH_PASSWORD=
 
 - `JWT_SECRET` — 64-character hex string for signing JWTs. If omitted, a random secret is generated and stored in `.jwt-secret`.
 - `AUTH_USERNAME` / `AUTH_PASSWORD` — optional credentials used to seed the first account. If omitted, create the account through `/setup`.
+- On Netlify, set `AUTH_USERNAME` and `AUTH_PASSWORD` with Functions/Runtime scope. These credentials are read directly at runtime; `/setup` is disabled when both are configured.
+- SQLite remains suitable for local development. Netlify functions use temporary storage unless `NOBLE_DATA_DIR` points to a persistent mounted storage location; use a managed database for persistent production data.
 
 ## Project structure
 

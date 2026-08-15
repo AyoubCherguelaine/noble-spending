@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/auth';
 import { initSchema } from '@/lib/schema';
 import { db } from '@/lib/db';
+import { getRuntimeEnv } from '@/lib/jwt-secret';
 
 export async function GET() {
   try {
+    if (getRuntimeEnv('AUTH_USERNAME') && getRuntimeEnv('AUTH_PASSWORD')) {
+      return NextResponse.json({ hasUser: true });
+    }
     initSchema();
     const row = db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
     return NextResponse.json({ hasUser: !!row?.value });
@@ -15,6 +19,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    if (getRuntimeEnv('AUTH_USERNAME') && getRuntimeEnv('AUTH_PASSWORD')) {
+      return NextResponse.json({ error: 'Authentication is configured by the deployment environment' }, { status: 409 });
+    }
     initSchema();
     const { username, password } = await request.json();
     if (!username || !password || password.length < 6) {
