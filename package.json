@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "rm -rf .netlify/.next/cache .next/cache",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

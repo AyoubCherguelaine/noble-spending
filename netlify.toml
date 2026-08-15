@@ -14,7 +14,7 @@
   # The code reads these at runtime only via a dynamic path (lib/jwt-secret.ts,
   # getRuntimeEnv) that the bundler cannot statically analyze.
   #
-  # Belt-and-suspenders: stock, unmodified npm packages copied into the
-  # standalone output can coincidentally contain short secret values as
-  # substrings and get flagged too, even though they never touch our code.
-  SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/standalone/node_modules/**"
+  # Build caches are not deployable assets. Exclude them because Turbopack can
+  # serialize compiler inputs from a previous build into these files.
+  # Stock, unmodified packages in the standalone output are also not app code.
+  SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/cache/**,.next/cache/**,.netlify/.next/standalone/node_modules/**"
