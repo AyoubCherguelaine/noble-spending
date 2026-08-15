@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import OverviewScreen from './OverviewScreen';
@@ -59,19 +59,39 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [data, setData] = useState<DashboardData | null>(initialData);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const dataSnapshotRef = useRef(initialData ? JSON.stringify(initialData) : '');
 
   const mountedRef = useRef(false);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     const res = await fetch(`/api/data?month=${month}&year=${year}&period=${period}`, {
       cache: 'no-store',
     });
     if (!res.ok) throw new Error('Failed to load dashboard data');
     const json = await res.json();
-    setData(json);
-  };
+    const snapshot = JSON.stringify(json);
+    if (snapshot !== dataSnapshotRef.current) {
+      dataSnapshotRef.current = snapshot;
+      setData(json);
+    }
+  }, [month, year, period]);
 
-  useEffect(() => { refresh(); }, [month, year, period]);
+  // Keep the dashboard's shared state fresh without constantly polling the
+  // database. Hidden tabs wait until they become visible again.
+  useEffect(() => {
+    const checkForUpdates = () => {
+      if (!document.hidden) refresh().catch(() => {});
+    };
+
+    checkForUpdates();
+    const interval = window.setInterval(checkForUpdates, 60_000);
+    document.addEventListener('visibilitychange', checkForUpdates);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', checkForUpdates);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     if (mountedRef.current) {
