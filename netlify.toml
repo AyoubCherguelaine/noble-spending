@@ -18,3 +18,6 @@
   # serialize compiler inputs from a previous build into these files.
   # Stock, unmodified packages in the standalone output are also not app code.
   SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/cache/**,.next/cache/**,.netlify/.next/standalone/node_modules/**"
+  # AUTH_USERNAME is an identifier, not a credential. A common value such as
+  # "user" legitimately occurs inside source identifiers and Gmail API paths.
+  SECRETS_SCAN_OMIT_KEYS = "AUTH_USERNAME"

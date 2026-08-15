@@ -6,8 +6,9 @@ import nodeCrypto from 'node:crypto';
 function seedCredentials() {
   const existing = db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
   if (!existing) {
-    const defaultUsername = getRuntimeEnv('AUTH_USERNAME') || 'user';
-    const defaultPassword = getRuntimeEnv('AUTH_PASSWORD') || '12345678';
+    const defaultUsername = getRuntimeEnv('AUTH_USERNAME');
+    const defaultPassword = getRuntimeEnv('AUTH_PASSWORD');
+    if (!defaultUsername || !defaultPassword) return;
     const hash = hashPasswordSync(defaultPassword);
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_username', defaultUsername);
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_password_hash', hash);
