@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { getRuntimeEnv } from './jwt-secret';
 
 const ALGO = 'aes-256-gcm';
 const KEY_LEN = 32;
@@ -6,7 +7,7 @@ const IV_LEN = 16;
 const AUTH_TAG_LEN = 16;
 
 export function getKey(): Buffer {
-  const raw = process.env.TOKEN_ENCRYPTION_KEY || process.env.JWT_SECRET || '';
+  const raw = getRuntimeEnv('TOKEN_ENCRYPTION_KEY') || getRuntimeEnv('JWT_SECRET') || '';
   return crypto.scryptSync(raw, 'noble-salt', KEY_LEN);
 }
 
