@@ -4,7 +4,7 @@ import { initSchema } from '@/lib/schema';
 import { searchGmailMessages, extractPurchaseInfo, getStoredToken } from '@/lib/gmail';
 
 export async function POST() {
-  initSchema();
+  await initSchema();
   const accessToken = await getStoredToken();
   if (!accessToken) return NextResponse.json({ error: 'Not connected' }, { status: 400 });
 
@@ -14,9 +14,9 @@ export async function POST() {
     for (const msg of messages) {
       const info = extractPurchaseInfo(msg);
       if (!info.amount || !info.merchant) continue;
-      const exists = db.prepare('SELECT id FROM purchase_candidates WHERE source = ? AND external_id = ?').get('gmail', info.externalId) as any;
+      const exists = await db.prepare('SELECT id FROM purchase_candidates WHERE source = ? AND external_id = ?').get('gmail', info.externalId) as any;
       if (exists) continue;
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO purchase_candidates (source, external_id, merchant, purchase_date, amount, currency, card_last4, confidence, raw_text, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run('gmail', info.externalId, info.merchant, info.date, info.amount, info.currency, info.last4, 0.7, msg.snippet, 'pending');

@@ -5,16 +5,16 @@ import nodeCrypto from 'node:crypto';
 
 const RUNTIME_PASSWORD_PREFIX = 'runtime:';
 
-function seedCredentials() {
+async function seedCredentials() {
   if (getRuntimeEnv('AUTH_USERNAME') && getRuntimeEnv('AUTH_PASSWORD')) return;
-  const existing = db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
+  const existing = await db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
   if (!existing) {
     const defaultUsername = getRuntimeEnv('AUTH_USERNAME');
     const defaultPassword = getRuntimeEnv('AUTH_PASSWORD');
     if (!defaultUsername || !defaultPassword) return;
     const hash = hashPasswordSync(defaultPassword);
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_username', defaultUsername);
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_password_hash', hash);
+    await db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_username', defaultUsername);
+    await db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_password_hash', hash);
   }
 }
 
@@ -56,24 +56,24 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   }
 }
 
-export function getCredentials(): { username: string; passwordHash: string } | null {
+export async function getCredentials(): Promise<{ username: string; passwordHash: string } | null> {
   const runtimeUsername = getRuntimeEnv('AUTH_USERNAME');
   const runtimePassword = getRuntimeEnv('AUTH_PASSWORD');
   if (runtimeUsername && runtimePassword) {
     return { username: runtimeUsername, passwordHash: `${RUNTIME_PASSWORD_PREFIX}${runtimePassword}` };
   }
 
-  seedCredentials();
-  const rows = db.prepare("SELECT key, value FROM settings WHERE key IN ('auth_username','auth_password_hash')").all() as { key: string; value: string }[];
+  await seedCredentials();
+  const rows = await db.prepare("SELECT key, value FROM settings WHERE key IN ('auth_username','auth_password_hash')").all() as { key: string; value: string }[];
   const map: Record<string, string> = {};
   for (const r of rows) map[r.key] = r.value;
   if (!map.auth_username || !map.auth_password_hash) return null;
   return { username: map.auth_username, passwordHash: map.auth_password_hash };
 }
 
-export function hasUser(): boolean {
+export async function hasUser(): Promise<boolean> {
   try {
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
+    const row = await db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
     return !!row?.value;
   } catch {
     return false;

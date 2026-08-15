@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     params.push(`%${q}%`);
   }
   sql += ' ORDER BY name LIMIT 50';
-  const rows = db.prepare(sql).all(...params);
+  const rows = await db.prepare(sql).all(...params);
   return NextResponse.json(rows);
 }
 
@@ -21,8 +21,8 @@ export async function POST(request: Request) {
     const { name, category } = body;
     if (!name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
     const stmt = db.prepare('INSERT OR IGNORE INTO merchants (name, category) VALUES (?, ?)');
-    stmt.run(name.trim(), category || '');
-    const row = db.prepare('SELECT * FROM merchants WHERE name = ?').get(name.trim());
+    await stmt.run(name.trim(), category || '');
+    const row = await db.prepare('SELECT * FROM merchants WHERE name = ?').get(name.trim());
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });

@@ -18,7 +18,7 @@ function getWeekNumber(dateStr: string) {
 }
 
 export async function GET(request: Request) {
-  initSchema();
+  await initSchema();
 
   const url = new URL(request.url);
   const granularity = url.searchParams.get('granularity') || 'month'; // day, week, month, quarter, year
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   const endDate = url.searchParams.get('endDate');
   const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()), 10);
 
-  const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+  const settingsRows = await db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
   const settings: Record<string, string> = {};
   for (const r of settingsRows) settings[r.key] = r.value;
 
@@ -67,9 +67,9 @@ export async function GET(request: Request) {
   }
 
   query += ' ORDER BY date ASC';
-  const transactions = db.prepare(query).all(...params) as any[];
+  const transactions = await db.prepare(query).all(...params) as any[];
 
-  const accounts = db.prepare('SELECT * FROM accounts').all() as any[];
+  const accounts = await db.prepare('SELECT * FROM accounts').all() as any[];
   const accountMap = new Map(accounts.map(a => [a.id, a]));
 
   const grouped: Record<string, { income: number; spend: number; count: number; transactions: any[] }> = {};

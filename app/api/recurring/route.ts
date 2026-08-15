@@ -4,7 +4,7 @@ import { initSchema } from '@/lib/schema';
 import { toUsd, getRates } from '@/lib/currency';
 
 export async function GET(request: Request) {
-  initSchema();
+  await initSchema();
 
   const { searchParams } = new URL(request.url);
   const active = searchParams.get('active');
@@ -17,13 +17,13 @@ export async function GET(request: Request) {
   }
 
   sql += ' ORDER BY next_occurrence ASC';
-  const rows = db.prepare(sql).all(...params);
+  const rows = await db.prepare(sql).all(...params);
   return NextResponse.json(rows);
 }
 
 export async function POST(request: Request) {
   try {
-    initSchema();
+    await initSchema();
     const body = await request.json();
 
     const {
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       'INSERT INTO recurring_transactions (type, category, method, account_id, merchant, original_currency, original_amount, note, frequency, start_date, end_date, next_occurrence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
-    const result = stmt.run(
+    const result = await stmt.run(
       type,
       category,
       method || '',
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       effectiveNext
     );
 
-    const row = db.prepare('SELECT * FROM recurring_transactions WHERE id = ?').get(result.lastInsertRowid);
+    const row = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ?').get(result.lastInsertRowid);
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
     console.error('Failed to create recurring transaction:', e);
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    initSchema();
+    await initSchema();
     const body = await request.json();
     const { id, type, category, method, account_id, merchant, original_currency, original_amount, note, frequency, start_date, end_date, next_occurrence, active } = body;
 
@@ -113,9 +113,9 @@ export async function PUT(request: Request) {
     }
 
     values.push(id);
-    db.prepare(`UPDATE recurring_transactions SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    await db.prepare(`UPDATE recurring_transactions SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
-    const row = db.prepare('SELECT * FROM recurring_transactions WHERE id = ?').get(id);
+    const row = await db.prepare('SELECT * FROM recurring_transactions WHERE id = ?').get(id);
     return NextResponse.json(row);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });
@@ -124,12 +124,12 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    initSchema();
+    await initSchema();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-    db.prepare('DELETE FROM recurring_transactions WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM recurring_transactions WHERE id = ?').run(id);
     return NextResponse.json({ success: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });

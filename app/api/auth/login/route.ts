@@ -4,7 +4,7 @@ import { issueToken, verifyPassword, getCredentials } from '@/lib/auth';
 export async function POST(request: Request) {
   try {
     const { username, password } = await request.json();
-    const creds = getCredentials();
+    const creds = await getCredentials();
     if (!creds) return NextResponse.json({ error: 'Auth not configured' }, { status: 500 });
 
     if (username !== creds.username) {

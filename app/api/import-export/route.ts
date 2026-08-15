@@ -5,14 +5,14 @@ import { toUsd, getRates } from '@/lib/currency';
 
 export async function GET(request: Request) {
   try {
-    initSchema();
+    await initSchema();
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'transactions';
     const format = searchParams.get('format') || 'csv';
 
     if (type === 'transactions') {
-      const transactions = db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC').all() as any[];
+      const transactions = await db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC').all() as any[];
 
       if (format === 'json') {
         return NextResponse.json(transactions);
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    initSchema();
+    await initSchema();
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `CSV must contain columns: ${expectedHeaders.join(', ')}` }, { status: 400 });
     }
 
-    const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+    const settingsRows = await db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
     const settings: Record<string, string> = {};
     for (const r of settingsRows) settings[r.key] = r.value;
     const rates = getRates(settings);
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
         let accountId = parseInt(row.account_id) || null;
 
         if (!isTransfer && !accountId) {
-          const accounts = db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
+          const accounts = await db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
           const match = accounts.find((a: any) => a.currency === (row.original_currency || 'USD'));
           accountId = match ? match.id : accounts[0]?.id;
         }
@@ -112,13 +112,13 @@ export async function POST(request: Request) {
         if (!isTransfer && accountId) {
           const txType = row.type || 'spend';
           if (txType === 'income') {
-            db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(Math.abs(amount), accountId);
+          await db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(Math.abs(amount), accountId);
           } else {
-            db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(Math.abs(amount), accountId);
+          await db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(Math.abs(amount), accountId);
           }
         }
 
-        db.prepare(
+        await db.prepare(
           'INSERT INTO transactions (date, merchant, category, method, account_id, original_currency, original_amount, converted_amount, type, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         ).run(row.date, row.merchant, row.category, row.method || '', accountId, row.original_currency || 'USD', amount, converted, row.type || 'spend', row.note || '');
 

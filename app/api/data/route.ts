@@ -3,6 +3,11 @@ import { db } from '@/lib/db';
 import { initSchema } from '@/lib/schema';
 import { getRates, toUsd, convertToDisplay, formatMoney } from '@/lib/currency';
 
+// This endpoint reads mutable PostgreSQL state. Never serve a prerendered or cached
+// response after a write.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const COLORS: Record<string, string> = {
   housing: '#60a5fa', daily: '#34d399', online: '#f472b6', real: '#fbbf24',
   subs: '#a78bfa', transport: '#22d3ee', debt: '#fb7185', savings: '#4ade80', rest: '#94a3b8'
@@ -23,28 +28,28 @@ const CAT_META: Record<string, { en: string; ar: string }> = {
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export async function GET(request: Request) {
-  initSchema();
+  await initSchema();
 
   const url = new URL(request.url);
   const month = parseInt(url.searchParams.get('month') || String(new Date().getMonth() + 1), 10);
   const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()), 10);
   const monthStr = String(month).padStart(2, '0');
 
-  const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+  const settingsRows = await db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
   const settings: Record<string, string> = {};
   for (const r of settingsRows) settings[r.key] = r.value;
 
   const currency = settings.currency || 'USD';
   const rates = getRates(settings);
 
-  const salaries = db.prepare('SELECT * FROM salaries WHERE month = ? AND year = ?').all(month, year);
-  const services = db.prepare('SELECT * FROM services WHERE month = ? AND year = ?').all(month, year);
-  const subs = db.prepare('SELECT * FROM subscriptions WHERE month = ? AND year = ?').all(month, year);
-  const bills = db.prepare('SELECT * FROM bills WHERE month = ? AND year = ?').all(month, year);
-  const debtsOwe = db.prepare("SELECT * FROM debts WHERE type = 'owe' AND status != 'paid'").all();
-  const debtsOwed = db.prepare("SELECT * FROM debts WHERE type = 'owed' AND status != 'paid'").all();
-  const budgets = db.prepare('SELECT * FROM budgets WHERE month = ? AND year = ?').all(month, year);
-  const transactions = db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC').all();
+  const salaries = await db.prepare('SELECT * FROM salaries WHERE month = ? AND year = ?').all(month, year);
+  const services = await db.prepare('SELECT * FROM services WHERE month = ? AND year = ?').all(month, year);
+  const subs = await db.prepare('SELECT * FROM subscriptions WHERE month = ? AND year = ?').all(month, year);
+  const bills = await db.prepare('SELECT * FROM bills WHERE month = ? AND year = ?').all(month, year);
+  const debtsOwe = await db.prepare("SELECT * FROM debts WHERE type = 'owe' AND status != 'paid'").all();
+  const debtsOwed = await db.prepare("SELECT * FROM debts WHERE type = 'owed' AND status != 'paid'").all();
+  const budgets = await db.prepare('SELECT * FROM budgets WHERE month = ? AND year = ?').all(month, year);
+  const transactions = await db.prepare('SELECT * FROM transactions ORDER BY date DESC, id DESC').all();
 
   const salaryTotalDisplay = salaries.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.net), s.currency || 'USD', currency, rates), 0);
   const serviceTotalDisplay = services.reduce((a: number, s: any) => a + convertToDisplay(parseFloat(s.amount), s.currency || 'USD', currency, rates), 0);
@@ -118,7 +123,7 @@ export async function GET(request: Request) {
     const daysInMonth = new Date(year, month, 0).getDate();
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${monthStr}-${String(day).padStart(2, '0')}`;
-      const dayTxs = db.prepare('SELECT * FROM transactions WHERE date = ?').all(dateStr) as any[];
+      const dayTxs = await db.prepare('SELECT * FROM transactions WHERE date = ?').all(dateStr) as any[];
       const filteredForDay = dayTxs.filter((t: any) => t.category !== 'transfer' && t.method !== 'transfer');
       const txIncome = filteredForDay.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
       const spend = filteredForDay.filter((t: any) => t.type === 'spend').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
@@ -131,7 +136,7 @@ export async function GET(request: Request) {
       const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
       const mmStr = String(d.getMonth() + 1).padStart(2, '0');
 
-      const monthTransactions = db.prepare('SELECT * FROM transactions WHERE strftime(\'%Y-%m\', date) = ?').all(`${d.getFullYear()}-${mmStr}`);
+      const monthTransactions = await db.prepare('SELECT * FROM transactions WHERE strftime(\'%Y-%m\', date) = ?').all(`${d.getFullYear()}-${mmStr}`);
       const filteredForTrend = monthTransactions.filter((t: any) => t.category !== 'transfer' && t.method !== 'transfer');
       const txIncome = filteredForTrend.filter((t: any) => t.type === 'income').reduce((a: number, t: any) => a + convertToDisplay(t.converted_amount, 'USD', currency, rates), 0);
       const spend = filteredForTrend.filter((t: any) => t.type === 'spend').reduce((a: number, t: any) => a + Math.abs(convertToDisplay(t.converted_amount, 'USD', currency, rates)), 0);
@@ -140,7 +145,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const accounts = db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
+  const accounts = await db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
   const accountsDisplay = accounts.map((a: any) => ({
     ...a,
     balance_display: convertToDisplay(parseFloat(a.balance || 0), a.currency || 'USD', currency as any, rates),
@@ -161,7 +166,7 @@ export async function GET(request: Request) {
     const accTxs: Record<string, { income: number; outcome: number }> = {};
     historyMonths.forEach(m => { accTxs[m] = { income: 0, outcome: 0 }; });
 
-    const allTxForAccount = db.prepare('SELECT * FROM transactions WHERE account_id = ?').all(acc.id) as any[];
+    const allTxForAccount = await db.prepare('SELECT * FROM transactions WHERE account_id = ?').all(acc.id) as any[];
     const totalNetOriginal = allTxForAccount.reduce((a: number, t: any) => a + (parseFloat(t.original_amount) || 0), 0);
     const accCurrency = acc.currency || 'USD';
     const startingBalance = (parseFloat(acc.balance || 0)) - totalNetOriginal;
@@ -199,7 +204,7 @@ export async function GET(request: Request) {
     for (const acc of accounts) {
       const accId = String(acc.id);
       const accCurrency = acc.currency || 'USD';
-      const allTxForAccount = db.prepare('SELECT * FROM transactions WHERE account_id = ?').all(acc.id) as any[];
+    const allTxForAccount = await db.prepare('SELECT * FROM transactions WHERE account_id = ?').all(acc.id) as any[];
       const totalNetOriginal = allTxForAccount.reduce((a: number, t: any) => a + (parseFloat(t.original_amount) || 0), 0);
       const startingBalance = (parseFloat(acc.balance || 0)) - totalNetOriginal;
 
@@ -304,5 +309,9 @@ export async function GET(request: Request) {
     budgetsDisplay,
     budgetAlerts,
     activeAlerts,
+  }, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    },
   });
 }

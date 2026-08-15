@@ -4,7 +4,7 @@ import { initSchema } from '@/lib/schema';
 
 export async function GET(request: Request) {
   try {
-    initSchema();
+    await initSchema();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
 
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     }
 
     sql += ' ORDER BY created_at DESC';
-    const rows = db.prepare(sql).all(...params);
+    const rows = await db.prepare(sql).all(...params);
     return NextResponse.json(rows);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    initSchema();
+    await initSchema();
     const body = await request.json();
 
     const {
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       'INSERT INTO transaction_templates (name, type, category, method, account_id, merchant, original_currency, original_amount, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
-    const result = stmt.run(
+    const result = await stmt.run(
       name.trim(),
       type,
       category,
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       note
     );
 
-    const row = db.prepare('SELECT * FROM transaction_templates WHERE id = ?').get(result.lastInsertRowid);
+    const row = await db.prepare('SELECT * FROM transaction_templates WHERE id = ?').get(result.lastInsertRowid);
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });
@@ -70,12 +70,12 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    initSchema();
+    await initSchema();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-    db.prepare('DELETE FROM transaction_templates WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM transaction_templates WHERE id = ?').run(id);
     return NextResponse.json({ success: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });

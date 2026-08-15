@@ -1,6 +1,6 @@
 # Noble — Personal Finance Dashboard
 
-A clean, terminal-inspired personal finance dashboard built with Next.js, SQLite, and Tailwind CSS. Track money across multiple accounts, currencies (USD, EUR, DA), and time periods.
+A clean, terminal-inspired personal finance dashboard built with Next.js, PostgreSQL, and Tailwind CSS. Track money across multiple accounts, currencies (USD, EUR, DA), and time periods.
 
 ## Features
 
@@ -51,7 +51,7 @@ A clean, terminal-inspired personal finance dashboard built with Next.js, SQLite
 - **Budgets** — set and track spending budgets per category
 
 ### Technical
-- SQLite backend via `better-sqlite3`
+- PostgreSQL backend via `pg` (`NETLIFY_DB_URL` on Netlify Database, `DATABASE_URL` elsewhere)
 - Server-side data fetching with client hydration
 - SSR-compatible initial data loading
 - Pure CSS + Tailwind styling (no UI framework)
@@ -90,7 +90,7 @@ AUTH_PASSWORD=
 - `JWT_SECRET` — 64-character hex string for signing JWTs. If omitted, a random secret is generated and stored in `.jwt-secret`.
 - `AUTH_USERNAME` / `AUTH_PASSWORD` — optional credentials used to seed the first account. If omitted, create the account through `/setup`.
 - On Netlify, set `AUTH_USERNAME` and `AUTH_PASSWORD` with Functions/Runtime scope. These credentials are read directly at runtime; `/setup` is disabled when both are configured.
-- SQLite remains suitable for local development. Netlify functions use temporary storage unless `NOBLE_DATA_DIR` points to a persistent mounted storage location; use a managed database for persistent production data.
+- PostgreSQL is required for persistence on Netlify. Create a managed PostgreSQL database through Netlify’s Database menu. Netlify supplies `NETLIFY_DB_URL` automatically; the app also accepts `DATABASE_URL` for Neon, Supabase, or another PostgreSQL provider. The schema is created automatically on the first request.
 
 ## Project structure
 
@@ -120,14 +120,14 @@ lib/
   auth.ts               — password hashing, JWT issue/verify
   jwt-secret.ts         — JWT secret management
   currency.ts           — formatting & conversion utilities
-  schema.ts             — SQLite schema & migrations
+    schema.ts             — PostgreSQL schema initialization
 proxy.ts                — Next.js proxy (auth middleware)
 ```
 
 ## Tech stack
 
 - **Framework**: Next.js 16 (App Router, Turbopack)
-- **Database**: SQLite via `better-sqlite3`
+- **Database**: PostgreSQL via `pg`
 - **Charts**: Recharts
 - **Auth**: `jose` (JWT) + `crypto.scrypt` (password hashing)
 - **Styling**: Tailwind CSS + inline styles

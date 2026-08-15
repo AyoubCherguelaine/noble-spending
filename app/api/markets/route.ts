@@ -5,9 +5,9 @@ import { marketProviders } from '@/lib/market-providers';
 import type { MarketQuote } from '@/types';
 
 export async function GET() {
-  initSchema();
+  await initSchema();
   try {
-    const cached = db.prepare("SELECT payload FROM external_cache WHERE provider = 'markets' AND cache_key = 'quotes' AND expires_at > datetime('now') LIMIT 1").get() as { payload: string } | undefined;
+    const cached = await db.prepare("SELECT payload FROM external_cache WHERE provider = 'markets' AND cache_key = 'quotes' AND expires_at > datetime('now') LIMIT 1").get() as { payload: string } | undefined;
     if (cached) {
       return NextResponse.json({ quotes: JSON.parse(cached.payload), stale: false });
     }
@@ -24,17 +24,17 @@ export async function GET() {
     const payload = JSON.stringify(quotes);
     const now = new Date();
     const expires = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
-    db.prepare('INSERT OR REPLACE INTO external_cache (provider, cache_key, payload, fetched_at, expires_at) VALUES (?, ?, ?, ?, ?)').run('markets', 'quotes', payload, now.toISOString(), expires);
+    await db.prepare('INSERT OR REPLACE INTO external_cache (provider, cache_key, payload, fetched_at, expires_at) VALUES (?, ?, ?, ?, ?)').run('markets', 'quotes', payload, now.toISOString(), expires);
     return NextResponse.json({ quotes, stale: false });
   } catch (e) {
-    const fallback = db.prepare("SELECT payload FROM external_cache WHERE provider = 'markets' AND cache_key = 'quotes' LIMIT 1").get() as { payload: string } | undefined;
+    const fallback = await db.prepare("SELECT payload FROM external_cache WHERE provider = 'markets' AND cache_key = 'quotes' LIMIT 1").get() as { payload: string } | undefined;
     if (fallback) return NextResponse.json({ quotes: JSON.parse(fallback.payload), stale: true });
     return NextResponse.json({ quotes: [], stale: true }, { status: 503 });
   }
 }
 
 export async function POST() {
-  initSchema();
+  await initSchema();
   try {
     const quotes: MarketQuote[] = [];
     for (const provider of marketProviders) {
@@ -52,7 +52,7 @@ export async function POST() {
     const payload = JSON.stringify(quotes);
     const now = new Date();
     const expires = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
-    db.prepare('INSERT OR REPLACE INTO external_cache (provider, cache_key, payload, fetched_at, expires_at) VALUES (?, ?, ?, ?, ?)').run('markets', 'quotes', payload, now.toISOString(), expires);
+    await db.prepare('INSERT OR REPLACE INTO external_cache (provider, cache_key, payload, fetched_at, expires_at) VALUES (?, ?, ?, ?, ?)').run('markets', 'quotes', payload, now.toISOString(), expires);
     return NextResponse.json({ quotes, stale: false });
   } catch (e) {
     return NextResponse.json({ error: 'refresh failed' }, { status: 500 });

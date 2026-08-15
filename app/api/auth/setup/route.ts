@@ -9,8 +9,8 @@ export async function GET() {
     if (getRuntimeEnv('AUTH_USERNAME') && getRuntimeEnv('AUTH_PASSWORD')) {
       return NextResponse.json({ hasUser: true });
     }
-    initSchema();
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
+    await initSchema();
+    const row = await db.prepare("SELECT value FROM settings WHERE key = 'auth_username'").get() as { value: string } | undefined;
     return NextResponse.json({ hasUser: !!row?.value });
   } catch {
     return NextResponse.json({ hasUser: false });
@@ -22,15 +22,15 @@ export async function POST(request: Request) {
     if (getRuntimeEnv('AUTH_USERNAME') && getRuntimeEnv('AUTH_PASSWORD')) {
       return NextResponse.json({ error: 'Authentication is configured by the deployment environment' }, { status: 409 });
     }
-    initSchema();
+    await initSchema();
     const { username, password } = await request.json();
     if (!username || !password || password.length < 6) {
       return NextResponse.json({ error: 'Username and password (min 6 chars) are required' }, { status: 400 });
     }
 
     const hash = await hashPassword(password);
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_username', username);
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_password_hash', hash);
+    await db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_username', username);
+    await db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('auth_password_hash', hash);
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

@@ -33,22 +33,22 @@ function getNextOccurrence(dateStr: string, frequency: string): string {
 
 export async function POST(request: Request) {
   try {
-    initSchema();
+    await initSchema();
 
     const today = new Date().toISOString().split('T')[0];
-    const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+    const settingsRows = await db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
     const settings: Record<string, string> = {};
     for (const r of settingsRows) settings[r.key] = r.value;
     const rates = getRates(settings);
     const currency = settings.currency || 'USD';
 
-    const recurring = db.prepare('SELECT * FROM recurring_transactions WHERE active = 1 AND next_occurrence <= ?').all(today) as any[];
+    const recurring = await db.prepare('SELECT * FROM recurring_transactions WHERE active = 1 AND next_occurrence <= ?').all(today) as any[];
 
     let generated = 0;
 
     for (const item of recurring) {
       if (item.end_date && item.next_occurrence > item.end_date) {
-        db.prepare('UPDATE recurring_transactions SET active = 0 WHERE id = ?').run(item.id);
+        await db.prepare('UPDATE recurring_transactions SET active = 0 WHERE id = ?').run(item.id);
         continue;
       }
 
@@ -59,15 +59,15 @@ export async function POST(request: Request) {
       let accountId = item.account_id;
 
       if (!isTransfer && !accountId) {
-        const accounts = db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
+        const accounts = await db.prepare('SELECT * FROM accounts ORDER BY currency, name').all() as any[];
         const match = accounts.find((a: any) => a.currency === (item.original_currency || 'USD'));
         accountId = match ? match.id : accounts[0]?.id;
       }
 
       if (!isTransfer && accountId) {
-        const existing = db.prepare('SELECT * FROM transactions WHERE date = ? AND merchant = ? AND account_id = ? AND converted_amount = ?').get(item.next_occurrence, item.merchant, accountId, converted) as any;
+        const existing = await db.prepare('SELECT * FROM transactions WHERE date = ? AND merchant = ? AND account_id = ? AND converted_amount = ?').get(item.next_occurrence, item.merchant, accountId, converted) as any;
         if (existing) {
-          db.prepare('UPDATE recurring_transactions SET next_occurrence = ? WHERE id = ?').run(getNextOccurrence(item.next_occurrence, item.frequency), item.id);
+          await db.prepare('UPDATE recurring_transactions SET next_occurrence = ? WHERE id = ?').run(getNextOccurrence(item.next_occurrence, item.frequency), item.id);
           continue;
         }
       }
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         'INSERT INTO transactions (date, merchant, category, method, account_id, original_currency, original_amount, converted_amount, type, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
 
-      const result = stmt.run(
+        const result = await stmt.run(
         item.next_occurrence,
         item.merchant,
         item.category,
@@ -92,14 +92,14 @@ export async function POST(request: Request) {
       if (!isTransfer && accountId) {
         const txType = item.type || 'spend';
         if (txType === 'income') {
-          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(Math.abs(amount), accountId);
+          await db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').run(Math.abs(amount), accountId);
         } else {
-          db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(Math.abs(amount), accountId);
+          await db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').run(Math.abs(amount), accountId);
         }
       }
 
       const nextDate = getNextOccurrence(item.next_occurrence, item.frequency);
-      db.prepare('UPDATE recurring_transactions SET next_occurrence = ?, last_generated_at = ? WHERE id = ?').run(nextDate, today, item.id);
+      await db.prepare('UPDATE recurring_transactions SET next_occurrence = ?, last_generated_at = ? WHERE id = ?').run(nextDate, today, item.id);
 
       generated++;
     }

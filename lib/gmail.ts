@@ -11,7 +11,7 @@ export interface GmailMessage {
 }
 
 export async function getStoredToken(): Promise<string | null> {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'gmail_token_default'").get() as { value: string } | undefined;
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'gmail_token_default'").get() as { value: string } | undefined;
   if (!row?.value) return null;
   try {
     return decrypt(row.value);
@@ -22,7 +22,7 @@ export async function getStoredToken(): Promise<string | null> {
 
 export async function storeToken(token: string): Promise<void> {
   const encrypted = encrypt(token);
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('gmail_token_default', encrypted);
+  await db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('gmail_token_default', encrypted);
 }
 
 export async function searchGmailMessages(token: string, query: string): Promise<GmailMessage[]> {

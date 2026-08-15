@@ -63,7 +63,10 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const mountedRef = useRef(false);
 
   const refresh = async () => {
-    const res = await fetch(`/api/data?month=${month}&year=${year}&period=${period}`);
+    const res = await fetch(`/api/data?month=${month}&year=${year}&period=${period}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error('Failed to load dashboard data');
     const json = await res.json();
     setData(json);
   };

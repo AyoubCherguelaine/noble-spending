@@ -4,7 +4,7 @@ import { initSchema } from '@/lib/schema';
 import { toUsd, getRates, convertToDisplay } from '@/lib/currency';
 
 export async function GET(request: Request) {
-  initSchema();
+  await initSchema();
 
   const url = new URL(request.url);
   const q = url.searchParams.get('q') || '';
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const minAmount = url.searchParams.get('minAmount') || '';
   const maxAmount = url.searchParams.get('maxAmount') || '';
 
-  const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+  const settingsRows = await db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
   const settings: Record<string, string> = {};
   for (const r of settingsRows) settings[r.key] = r.value;
   const currency = settings.currency || 'USD';
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   if (maxAmount) { sql += ' AND ABS(original_amount) <= ?'; params.push(parseFloat(maxAmount)); }
 
   sql += ' ORDER BY date DESC, id DESC';
-  const rows = db.prepare(sql).all(...params) as any[];
+  const rows = await db.prepare(sql).all(...params) as any[];
 
   const results = rows.map((t: any) => ({
     id: t.id,

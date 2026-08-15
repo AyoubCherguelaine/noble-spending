@@ -16,14 +16,14 @@ export async function importCandidate(candidate: PurchaseCandidate, settings: Re
   let merchantId: number | undefined;
   if (candidate.merchant?.trim()) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const existing = db.prepare('SELECT id FROM merchants WHERE name = ?').get(candidate.merchant.trim()) as any;
+    const existing = await db.prepare('SELECT id FROM merchants WHERE name = ?').get(candidate.merchant.trim()) as any;
     if (existing) {
       merchantId = existing.id;
       if (candidate.category) {
-        db.prepare('UPDATE merchants SET category = ? WHERE id = ?').run(candidate.category, merchantId);
+        await db.prepare('UPDATE merchants SET category = ? WHERE id = ?').run(candidate.category, merchantId);
       }
     } else {
-      const result = db.prepare('INSERT INTO merchants (name, category) VALUES (?, ?)').run(candidate.merchant.trim(), candidate.category || null);
+      const result = await db.prepare('INSERT INTO merchants (name, category) VALUES (?, ?)').run(candidate.merchant.trim(), candidate.category || null);
       merchantId = result.lastInsertRowid as number;
     }
   }
@@ -31,16 +31,16 @@ export async function importCandidate(candidate: PurchaseCandidate, settings: Re
   let accountId: number | undefined;
   if (candidate.matchedMethodId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const method = db.prepare('SELECT * FROM payment_methods WHERE id = ?').get(candidate.matchedMethodId) as any;
+    const method = await db.prepare('SELECT * FROM payment_methods WHERE id = ?').get(candidate.matchedMethodId) as any;
     if (method?.details) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const acc = db.prepare('SELECT id FROM accounts WHERE details LIKE ? LIMIT 1').get(`%${method.details}%`) as any;
+      const acc = await db.prepare('SELECT id FROM accounts WHERE details LIKE ? LIMIT 1').get(`%${method.details}%`) as any;
       if (acc) accountId = acc.id;
     }
   }
   if (!accountId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const firstAccount = db.prepare('SELECT id FROM accounts LIMIT 1').get() as any;
+  const firstAccount = await db.prepare('SELECT id FROM accounts LIMIT 1').get() as any;
     if (firstAccount) accountId = firstAccount.id;
   }
 
@@ -48,7 +48,7 @@ export async function importCandidate(candidate: PurchaseCandidate, settings: Re
     INSERT INTO transactions (date, merchant, category, method, account_id, original_currency, original_amount, converted_amount, type, note)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const result = stmt.run(
+  const result = await stmt.run(
     candidate.purchaseDate || new Date().toISOString().slice(0, 10),
     candidate.merchant || 'Unknown',
     candidate.category || 'daily',
@@ -63,14 +63,14 @@ export async function importCandidate(candidate: PurchaseCandidate, settings: Re
 
   if (accountId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as any;
+  const account = await db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as any;
     if (account) {
       const newBalance = parseFloat(account.balance || 0) + convertedAmount;
-      db.prepare('UPDATE accounts SET balance = ? WHERE id = ?').run(newBalance, accountId);
+      await db.prepare('UPDATE accounts SET balance = ? WHERE id = ?').run(newBalance, accountId);
     }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(result.lastInsertRowid) as any;
+  const transaction = await db.prepare('SELECT * FROM transactions WHERE id = ?').get(result.lastInsertRowid) as any;
   return transaction;
 }

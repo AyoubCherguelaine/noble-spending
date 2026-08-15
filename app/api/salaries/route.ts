@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     params.push(month, year);
   }
   sql += ' ORDER BY year DESC, month DESC, id DESC';
-  const rows = db.prepare(sql).all(...params);
+  const rows = await db.prepare(sql).all(...params);
   return NextResponse.json(rows);
 }
 
@@ -28,8 +28,8 @@ export async function POST(request: Request) {
     const salaryDate = date || new Date().toISOString().split('T')[0];
     const salaryId = crypto.randomUUID();
     const stmt = db.prepare('INSERT INTO salaries (id, company, role, gross, net, payday, type, date, currency, month, year, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    stmt.run(salaryId, company.trim(), role || '', gross || 0, net, payday || '', type || '', salaryDate, entryCurrency, month || new Date().getMonth() + 1, year || new Date().getFullYear(), method || 'Salary');
-    const row = db.prepare('SELECT * FROM salaries WHERE id = ?').get(salaryId);
+    await stmt.run(salaryId, company.trim(), role || '', gross || 0, net, payday || '', type || '', salaryDate, entryCurrency, month || new Date().getMonth() + 1, year || new Date().getFullYear(), method || 'Salary');
+    const row = await db.prepare('SELECT * FROM salaries WHERE id = ?').get(salaryId);
 
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
@@ -43,19 +43,19 @@ export async function PUT(request: Request) {
     const { id, company, role, gross, net, payday, type, date, month, year, currency, method } = body;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
     const entryCurrency = currency || 'USD';
-    db.prepare('UPDATE salaries SET company = ?, role = ?, gross = ?, net = ?, payday = ?, type = ?, date = ?, currency = ?, month = ?, year = ?, method = ? WHERE id = ?').run(company, role, gross, net, payday, type, date, entryCurrency, month, year, method || 'Salary', id);
-    const row = db.prepare('SELECT * FROM salaries WHERE id = ?').get(id);
+    await db.prepare('UPDATE salaries SET company = ?, role = ?, gross = ?, net = ?, payday = ?, type = ?, date = ?, currency = ?, month = ?, year = ?, method = ? WHERE id = ?').run(company, role, gross, net, payday, type, date, entryCurrency, month, year, method || 'Salary', id);
+    const row = await db.prepare('SELECT * FROM salaries WHERE id = ?').get(id);
 
-    const tx = db.prepare('SELECT * FROM transactions WHERE salary_id = ?').get(id) as any;
+    const tx = await db.prepare('SELECT * FROM transactions WHERE salary_id = ?').get(id) as any;
     if (tx) {
-      const settingsRows = db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
+      const settingsRows = await db.prepare('SELECT * FROM settings').all() as { key: string; value: string }[];
       const settings: Record<string, string> = {};
       for (const r of settingsRows) settings[r.key] = r.value;
       const rates = getRates(settings);
       const amount = parseFloat(net);
       const converted = toUsd(amount, entryCurrency, rates);
       const salaryDate = date || tx.date;
-      db.prepare('UPDATE transactions SET date = ?, merchant = ?, method = ?, original_currency = ?, original_amount = ?, converted_amount = ?, note = ? WHERE id = ?').run(salaryDate, company.trim(), method || 'Salary', entryCurrency, amount, converted, `Salary: ${type || 'Full-time'}`, tx.id);
+      await db.prepare('UPDATE transactions SET date = ?, merchant = ?, method = ?, original_currency = ?, original_amount = ?, converted_amount = ?, note = ? WHERE id = ?').run(salaryDate, company.trim(), method || 'Salary', entryCurrency, amount, converted, `Salary: ${type || 'Full-time'}`, tx.id);
     }
 
     return NextResponse.json(row);
@@ -69,8 +69,8 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
-    db.prepare('DELETE FROM transactions WHERE salary_id = ?').run(id);
-    db.prepare('DELETE FROM salaries WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM transactions WHERE salary_id = ?').run(id);
+    await db.prepare('DELETE FROM salaries WHERE id = ?').run(id);
     return NextResponse.json({ success: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });
